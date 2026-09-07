@@ -79,6 +79,7 @@ func _process(delta: float) -> void:
 	
 	var move_vec = (forward * -input_dir.z + right * input_dir.x + up * input_dir.y).normalized()
 	global_position += move_vec * current_speed * delta
+	global_position.y = maxf(global_position.y, 2.0)
 
 func _capture_screenshot() -> void:
 	if not DirAccess.dir_exists_absolute("res://screenshots"):

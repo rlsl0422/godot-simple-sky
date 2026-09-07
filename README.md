@@ -1,4 +1,4 @@
-﻿# Godot Simple Sky (Volumetric Clouds & Physically Based Atmosphere)
+# Godot Simple Sky (Volumetric Clouds & Physically Based Atmosphere)
 
 [![Godot Engine](https://img.shields.io/badge/Godot-v4.7%2B-478cbf?logo=godotengine&logoColor=white)](https://godotengine.org)
 [![Renderer](https://img.shields.io/badge/Renderer-Forward%2B%20%2F%20D3D12%20%2F%20Vulkan-orange)]()
@@ -39,8 +39,13 @@ A high-performance, physically based volumetric cloud and atmospheric scattering
   - **Reinhard Extended**: Smooth photographic highlights with configurable `white_point`.
   - **Filmic**: Cinematic toe and shoulder compression.
   - **Linear HDR**: Direct passthrough for projects utilizing Godot's `WorldEnvironment` tonemapper.
-- **Phase-Coherent Raymarching (Jimenez 2014 IGN)**:
-  - Interleaved Gradient Noise jittering with phase protection across grazing angles, eliminating slicing staircase artifacts.
+- **Phase-Coherent Raymarching & Resolution-Independent Blue Noise**:
+  - Screen-space Interleaved Gradient Noise (Jimenez 2014 IGN) driven by true pixel coordinates (`FRAGCOORD.xy`), preventing Moire beat patterns across arbitrary window resolutions and eliminating contour line ripples.
+  - Continuous micro-detail distance LOD blending with $C^1$-smooth Hermite cloud erosion falloff.
+  - Sub-step boundary refinement when transitioning from empty-space skips into cloud volumes.
+- **Physical Ground Aerial Perspective & Horizon Continuity**:
+  - Dynamic horizon dip calculation based on camera altitude for seamless atmosphere-to-ground transitions.
+  - Koschmieder's exponential aerial haze and hemispherical skylight illumination for the ground terrain, eliminating concentric ring artifacts and downward pitch-black voids.
 - **Zero-Startup Pre-baked Textures**:
   - 100% $C^1$ Quintic ($6t^5 - 15t^4 + 10t^3$) seamless 3D/2D noise textures pre-baked into `.res` assets for 0 ms instantaneous project launch.
 - **Interactive Inspector & Dynamic Time of Day**:
@@ -93,6 +98,7 @@ godot-simple-sky/
 │   ├── 02_sun_silver_lining.png
 │   ├── 03_golden_sunset.png
 │   ├── 04_above_clouds.png
+│   ├── 05_ground_and_contour_fix.png
 │   └── perf_metrics.json
 ├── scripts/
 │   ├── atmosphere_cloud_controller.gd  # Main sky/cloud controller

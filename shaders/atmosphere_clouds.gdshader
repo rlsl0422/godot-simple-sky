@@ -21,7 +21,7 @@ uniform float atmosphere_density : hint_range(0.1, 5.0, 0.1) = 1.0;
 uniform float rayleigh_strength : hint_range(0.1, 4.0, 0.1) = 1.0;
 uniform float mie_strength : hint_range(0.0, 5.0, 0.1) = 1.2;
 uniform float ozone_strength : hint_range(0.0, 4.0, 0.1) = 1.2;
-uniform vec3 ground_color : source_color = vec3(0.12, 0.10, 0.08);
+uniform vec3 ground_color : source_color = vec3(0.18, 0.22, 0.20);
 
 // ==========================================
 // UNIFORMS: VOLUMETRIC CLOUDS
@@ -92,8 +92,7 @@ const vec3 BETA_M = vec3(0.0210);
 const vec3 BETA_O = vec3(0.000342, 0.000829, 0.000035);
 
 // Interleaved Gradient Noise for screen-space ray jittering (Jimenez 2014)
-float get_ign(vec2 screen_uv) {
-	vec2 pixel_pos = screen_uv * vec2(1920.0, 1080.0);
+float get_ign(vec2 pixel_pos) {
 	vec3 magic = vec3(0.06711056, 0.00583715, 52.9829189);
 	return fract(magic.z * fract(dot(pixel_pos, magic.xy)));
 }
@@ -162,8 +161,15 @@ vec3 apply_tonemapping(vec3 color, float exp_val, int mode, float wp) {
 
 // Atmospheric In-Scattering in km space
 void compute_atmosphere(vec3 eye_pos_km, vec3 ray_dir, vec3 sun_dir, out vec3 sky_color, out vec3 sun_light_color) {
+	float cam_height = length(eye_pos_km) - R_EARTH;
+	float horizon_dip = -sqrt(max(2.0 * cam_height / R_EARTH, 0.0));
+	vec3 march_dir = ray_dir;
+	if (march_dir.y < horizon_dip + 0.002) {
+		march_dir = normalize(vec3(ray_dir.x, horizon_dip + 0.002, ray_dir.z));
+	}
+	
 	float t_atm_0, t_atm_1;
-	bool hit_atm = ray_sphere_intersect(eye_pos_km, ray_dir, R_ATMOSPHERE, t_atm_0, t_atm_1);
+	bool hit_atm = ray_sphere_intersect(eye_pos_km, march_dir, R_ATMOSPHERE, t_atm_0, t_atm_1);
 	
 	if (!hit_atm || t_atm_1 <= 0.0) {
 		sky_color = vec3(0.01, 0.02, 0.04);
@@ -172,19 +178,11 @@ void compute_atmosphere(vec3 eye_pos_km, vec3 ray_dir, vec3 sun_dir, out vec3 sk
 	}
 	
 	float t_start = max(t_atm_0, 0.0);
-	float t_end = t_atm_1;
-	
-	// Planet ground cutoff
-	float t_earth_0, t_earth_1;
-	if (ray_sphere_intersect(eye_pos_km, ray_dir, R_EARTH, t_earth_0, t_earth_1)) {
-		if (t_earth_0 > 0.0) {
-			t_end = min(t_end, t_earth_0);
-		}
-	}
+	float t_end = min(t_atm_1, t_start + 45.0);
 	
 	const int ATM_STEPS = 10;
 	float step_size = (t_end - t_start) / float(ATM_STEPS);
-	float cos_theta = dot(ray_dir, sun_dir);
+	float cos_theta = dot(march_dir, sun_dir);
 	
 	float p_rayleigh = rayleigh_phase(cos_theta);
 	// Forward Mie scattering (solar aureole): soft, warm halo around the sun that gracefully drops into sky blue
@@ -194,7 +192,7 @@ void compute_atmosphere(vec3 eye_pos_km, vec3 ray_dir, vec3 sun_dir, out vec3 sk
 	vec3 total_mie = vec3(0.0);
 	vec3 optical_depth = vec3(0.0);
 	
-	vec3 current_pos = eye_pos_km + ray_dir * (t_start + step_size * 0.5);
+	vec3 current_pos = eye_pos_km + march_dir * (t_start + step_size * 0.5);
 	
 	for (int i = 0; i < ATM_STEPS; i++) {
 		float height = length(current_pos) - R_EARTH;
@@ -227,7 +225,7 @@ void compute_atmosphere(vec3 eye_pos_km, vec3 ray_dir, vec3 sun_dir, out vec3 sk
 			total_mie += attenuation * d_mie;
 			optical_depth += vec3(d_rayleigh, d_mie, 0.0);
 		}
-		current_pos += ray_dir * step_size;
+		current_pos += march_dir * step_size;
 	}
 	
 	vec3 inscattering = (total_rayleigh * BETA_R * p_rayleigh + total_mie * BETA_M * p_mie) * sun_intensity * sun_color;
@@ -240,7 +238,7 @@ void compute_atmosphere(vec3 eye_pos_km, vec3 ray_dir, vec3 sun_dir, out vec3 sk
 }
 
 // Sample Cloud Density (pos in km space)
-float sample_cloud_density(vec3 pos_km, float height_norm, vec2 wind_offset_km, bool sample_detail) {
+float sample_cloud_density(vec3 pos_km, float height_norm, vec2 wind_offset_km, float detail_fade) {
 	// 1. Weather Map Sampling (Coverage, Cloud Type, Density)
 	vec2 weather_uv = (pos_km.xz + wind_offset_km * 0.04) * weather_scale;
 	vec4 weather = texture(weather_tex, weather_uv);
@@ -286,14 +284,14 @@ float sample_cloud_density(vec3 pos_km, float height_norm, vec2 wind_offset_km, 
 	float cov_threshold = 0.18;
 	float density = smoothstep(cov_threshold, cov_threshold + 0.32, cloud_mass) * cloud_density_multiplier * 3.6;
 	
-	// 6. Micro-detail erosion (only for nearby clouds to maintain 60 FPS)
-	if (density > 0.01 && sample_detail) {
+	// 6. Micro-detail erosion with continuous distance LOD & smooth falloff (eliminates contour banding)
+	if (density > 0.005 && detail_fade > 0.01) {
 		vec3 detail_p = (p + warp) * detail_scale + vec3(wind_offset_km.x, 0.0, wind_offset_km.y) * 0.25;
 		vec4 detail_noise = texture(detail_noise_tex, detail_p);
 		float detail_fbm = detail_noise.r * 0.625 + detail_noise.g * 0.25 + detail_noise.b * 0.125;
 		float erosion = mix(detail_fbm, 1.0 - detail_fbm, clamp(height_norm * 0.5, 0.0, 1.0));
-		density = remap(density, erosion * detail_strength * 0.35, 1.0, 0.0, 1.0);
-		density = max(density, 0.0);
+		float erode_amount = erosion * detail_strength * 0.35 * detail_fade;
+		density = smoothstep(erode_amount, 1.0, density) * density;
 	}
 	
 	return density;
@@ -307,8 +305,9 @@ void sky() {
 	// Wind offset in km
 	vec2 wind_offset_km = wind_direction.xz * (wind_speed * 0.001) * time_val;
 	
-	// Camera world position in km space
-	vec3 camera_pos_km = vec3(0.0, R_EARTH + 0.02, 0.0) + camera_world_position * 0.001;
+	// Camera world position in km space with minimum safe ground clearance
+	float safe_cam_alt = max(camera_world_position.y, 2.0) * 0.001;
+	vec3 camera_pos_km = vec3(camera_world_position.x * 0.001, R_EARTH + safe_cam_alt, camera_world_position.z * 0.001);
 	
 	// 1. Atmosphere Base Pass
 	vec3 sky_color = vec3(0.0);
@@ -387,7 +386,7 @@ void sky() {
 		
 		// Low-discrepancy screen-space ray jitter using Interleaved Gradient Noise (Jimenez 2014)
 		// Full [0, 1] range completely destroys all slice alignment and staircase terracing (Fixes Feedback 4)
-		float dither = get_ign(SCREEN_UV);
+		float dither = get_ign(FRAGCOORD.xy);
 		float current_t = t_start + base_step * dither;
 		
 		vec3 accumulated_cloud_color = vec3(0.0);
@@ -405,14 +404,20 @@ void sky() {
 			float current_alt = length(sample_pos);
 			float height_norm = clamp((current_alt - r_bottom_km) / (r_top_km - r_bottom_km), 0.0, 1.0);
 			
-			bool sample_detail = current_t < detail_lod_distance_km;
-			float density = sample_cloud_density(sample_pos, height_norm, wind_offset_km, sample_detail);
+			float detail_fade = clamp(1.0 - (current_t - (detail_lod_distance_km * 0.60)) / max(detail_lod_distance_km * 0.40, 0.001), 0.0, 1.0);
+			float density = sample_cloud_density(sample_pos, height_norm, wind_offset_km, detail_fade);
 			
 			// Distance fade near horizon: smoothly merges distant clouds into the horizon boundary haze
 			float horizon_fade = clamp(1.0 - (current_t - (max_distance_km * 0.55)) / (max_distance_km * 0.45), 0.0, 1.0);
 			density *= horizon_fade;
 			
 			if (density > 0.001) {
+				// Step refinement: if entering cloud on a skipped step, step back to accurately resolve boundary
+				if (consecutive_zeros > 2) {
+					current_t -= (empty_skip_multiplier - 1.0) * base_step * 0.5;
+					consecutive_zeros = 0;
+					continue;
+				}
 				consecutive_zeros = 0;
 				
 				// Progressive multi-scale light marching toward sun (in km):
@@ -427,7 +432,7 @@ void sky() {
 					float l_alt = length(light_pos);
 					float l_height_norm = clamp((l_alt - r_bottom_km) / (r_top_km - r_bottom_km), 0.0, 1.0);
 					
-					float l_dens = sample_cloud_density(light_pos, l_height_norm, wind_offset_km, false);
+					float l_dens = sample_cloud_density(light_pos, l_height_norm, wind_offset_km, 0.0);
 					optical_depth_sun += l_dens * l_weights[idx] * 8.5;
 				}
 				
@@ -473,10 +478,40 @@ void sky() {
 		// Sun disc dissolves exponentially into clouds; only forward Mie glow remains behind clouds
 		vec3 direct_sun_disc = sun_disc_color * pow(transmittance, 2.2);
 		
-		vec3 final_color = sky_color * transmittance + accumulated_cloud_color + direct_sun_disc;
+		vec3 background = sky_color;
+		if (hit_ground) {
+			float cam_height = length(camera_pos_km) - R_EARTH;
+			float horizon_dip = -sqrt(max(2.0 * cam_height / R_EARTH, 0.0));
+			float ground_sun_n = clamp(sun_dir.y, 0.0, 1.0);
+			vec3 sun_norm = sun_light_color / max(sun_intensity, 1.0);
+			vec3 direct_ground = sun_norm * ground_sun_n * 1.5;
+			vec3 ambient_ground = sky_color * 0.75 + vec3(0.08, 0.09, 0.10);
+			vec3 terrain_lit = ground_color * (direct_ground + ambient_ground);
+			
+			float g_haze = clamp(1.0 - exp(-t_ground_0 * 0.04 * atmosphere_density), 0.0, 1.0);
+			float horizon_factor = smoothstep(horizon_dip - 0.025, horizon_dip + 0.002, ray_dir.y);
+			float total_haze = max(g_haze, horizon_factor);
+			background = mix(terrain_lit, sky_color, total_haze);
+		}
+		vec3 final_color = background * transmittance + accumulated_cloud_color + direct_sun_disc;
 		COLOR = apply_tonemapping(final_color, exposure, tonemap_mode, white_point);
 	} else {
-		vec3 final_color = sky_color + sun_disc_color;
+		vec3 base_surface = sky_color;
+		if (hit_ground) {
+			float cam_height = length(camera_pos_km) - R_EARTH;
+			float horizon_dip = -sqrt(max(2.0 * cam_height / R_EARTH, 0.0));
+			float ground_sun_n = clamp(sun_dir.y, 0.0, 1.0);
+			vec3 sun_norm = sun_light_color / max(sun_intensity, 1.0);
+			vec3 direct_ground = sun_norm * ground_sun_n * 1.5;
+			vec3 ambient_ground = sky_color * 0.75 + vec3(0.08, 0.09, 0.10);
+			vec3 terrain_lit = ground_color * (direct_ground + ambient_ground);
+			
+			float g_haze = clamp(1.0 - exp(-t_ground_0 * 0.04 * atmosphere_density), 0.0, 1.0);
+			float horizon_factor = smoothstep(horizon_dip - 0.025, horizon_dip + 0.002, ray_dir.y);
+			float total_haze = max(g_haze, horizon_factor);
+			base_surface = mix(terrain_lit, sky_color, total_haze);
+		}
+		vec3 final_color = base_surface + sun_disc_color;
 		COLOR = apply_tonemapping(final_color, exposure, tonemap_mode, white_point);
 	}
 }
