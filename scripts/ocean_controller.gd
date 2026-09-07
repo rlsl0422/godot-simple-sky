@@ -141,12 +141,12 @@ enum OceanPreset {
 		_update_underwater_uniform("max_visibility_meters", val)
 
 @export_group("Godrays")
-@export_range(0.0, 5.0, 0.1) var godray_intensity: float = 2.2:
+@export_range(0.0, 5.0, 0.1) var godray_intensity: float = 1.1:
 	set(val):
 		godray_intensity = val
 		_update_underwater_uniform("godray_intensity", val)
 
-@export_range(2.0, 12.0, 0.5) var godray_sharpness: float = 7.0: ## Sharpness / thinness of light shafts
+@export_range(1.0, 10.0, 0.5) var godray_sharpness: float = 3.5: ## Sharpness / thinness of light shafts
 	set(val):
 		godray_sharpness = val
 		_update_underwater_uniform("godray_sharpness", val)
@@ -175,7 +175,13 @@ func _ready() -> void:
 	_sync_all_uniforms()
 
 func _process(_delta: float) -> void:
-	var cam = camera if camera else (get_viewport().get_camera_3d() if get_viewport() else null)
+	var cam: Camera3D = null
+	if Engine.is_editor_hint():
+		var vp = get_viewport()
+		if vp:
+			cam = vp.get_camera_3d()
+	if not cam:
+		cam = camera if camera else (get_viewport().get_camera_3d() if get_viewport() else null)
 	if not cam:
 		return
 
@@ -188,13 +194,10 @@ func _process(_delta: float) -> void:
 		var snapped_z = floorf(cam_pos.z / grid_step) * grid_step
 		ocean_mesh_instance.global_position = Vector3(snapped_x, 0.0, snapped_z)
 
-	# 2. Toggle underwater post processing quad based on camera height
+	# 2. Keep underwater quad aligned to camera viewport
 	if underwater_quad:
-		var is_submerged = cam_pos.y < 0.4
-		underwater_quad.visible = is_submerged
-		if is_submerged:
-			# Keep underwater quad tightly aligned to camera viewport
-			underwater_quad.global_transform = cam.global_transform
+		underwater_quad.visible = true
+		underwater_quad.global_transform = cam.global_transform
 
 	# 3. Synchronize lighting and time with AtmosphereController
 	_sync_environment_from_atmosphere()
@@ -244,7 +247,7 @@ func _init_underwater_quad() -> void:
 
 	_underwater_mat = underwater_quad.material_override as ShaderMaterial
 	underwater_quad.extra_cull_margin = 16384.0 # Always render regardless of frustum
-	underwater_quad.visible = false
+	underwater_quad.visible = true
 
 func _sync_environment_from_atmosphere() -> void:
 	if not atmosphere_controller:
