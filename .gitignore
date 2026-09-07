@@ -1,0 +1,19 @@
+# Godot 4+ specific ignores
+.godot/
+/android/
+
+# GDExtension API dump
+extension_api.json
+
+# Local feedback & scratch screenshots
+feedback_screenshots/
+
+# Temporary and build files
+*.tmp
+*.log
+
+# OS & Editor generated files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
