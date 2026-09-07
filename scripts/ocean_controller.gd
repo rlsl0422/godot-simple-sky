@@ -120,31 +120,36 @@ enum OceanPreset {
 # EXPORTS: UNDERWATER OPTICS (Y < 0)
 # ==========================================
 @export_group("Underwater Optics")
-@export var underwater_scatter_color: Color = Color(0.02, 0.16, 0.26):
+@export var underwater_scatter_color: Color = Color(0.0, 0.42, 0.62):
 	set(val):
 		underwater_scatter_color = val
 		_update_underwater_uniform("water_scatter_color", Vector3(val.r, val.g, val.b))
 
-@export_range(0.005, 0.08, 0.002) var underwater_turbidity: float = 0.025: ## In-scattering density
+@export_range(0.002, 0.05, 0.001) var underwater_turbidity: float = 0.010: ## In-scattering density (lower = clearer)
 	set(val):
 		underwater_turbidity = val
 		_update_underwater_uniform("turbidity", val)
 
-@export_range(0.0, 3.0, 0.1) var caustics_strength: float = 0.8:
+@export_range(0.0, 3.0, 0.1) var caustics_strength: float = 0.75:
 	set(val):
 		caustics_strength = val
 		_update_underwater_uniform("caustics_strength", val)
 
-@export_range(10.0, 150.0, 5.0) var underwater_max_visibility: float = 80.0:
+@export_range(10.0, 150.0, 5.0) var underwater_max_visibility: float = 110.0:
 	set(val):
 		underwater_max_visibility = val
 		_update_underwater_uniform("max_visibility_meters", val)
 
 @export_group("Godrays")
-@export_range(0.0, 5.0, 0.1) var godray_intensity: float = 2.4:
+@export_range(0.0, 5.0, 0.1) var godray_intensity: float = 2.2:
 	set(val):
 		godray_intensity = val
 		_update_underwater_uniform("godray_intensity", val)
+
+@export_range(2.0, 12.0, 0.5) var godray_sharpness: float = 7.0: ## Sharpness / thinness of light shafts
+	set(val):
+		godray_sharpness = val
+		_update_underwater_uniform("godray_sharpness", val)
 
 @export_group("Horizon & Distance Fade")
 @export_range(500.0, 4000.0, 50.0) var fade_inner_radius: float = 1400.0:
@@ -297,6 +302,7 @@ func _sync_all_uniforms() -> void:
 	_update_underwater_uniform("caustics_strength", caustics_strength)
 	_update_underwater_uniform("max_visibility_meters", underwater_max_visibility)
 	_update_underwater_uniform("godray_intensity", godray_intensity)
+	_update_underwater_uniform("godray_sharpness", godray_sharpness)
 
 func _update_ocean_uniform(param: String, value: Variant) -> void:
 	if _ocean_mat:
