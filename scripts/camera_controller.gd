@@ -5,11 +5,13 @@ extends Camera3D
 ## and quick hotkeys for weather presets and performance switching.
 
 const CloudController = preload("res://scripts/atmosphere_cloud_controller.gd")
+const OceanControllerClass = preload("res://scripts/ocean_controller.gd")
 
 @export var move_speed: float = 40.0
 @export var boost_speed: float = 400.0
 @export var look_sensitivity: float = 0.003
 @export var controller_node: Node
+@export var ocean_controller: Node
 
 var _yaw: float = 0.0
 var _pitch: float = 0.0
@@ -61,6 +63,14 @@ func _input(event: InputEvent) -> void:
 					controller_node.animate_time = !controller_node.animate_time
 				KEY_P:
 					_capture_screenshot()
+				KEY_F1:
+					if ocean_controller: ocean_controller.ocean_preset = OceanControllerClass.OceanPreset.CALM_LAKE
+				KEY_F2:
+					if ocean_controller: ocean_controller.ocean_preset = OceanControllerClass.OceanPreset.GENTLE_OCEAN
+				KEY_F3:
+					if ocean_controller: ocean_controller.ocean_preset = OceanControllerClass.OceanPreset.ROUGH_SEAS
+				KEY_F4:
+					if ocean_controller: ocean_controller.ocean_preset = OceanControllerClass.OceanPreset.STORMY_TEMPEST
 
 func _process(delta: float) -> void:
 	# Movement
@@ -73,13 +83,17 @@ func _process(delta: float) -> void:
 	if Input.is_key_pressed(KEY_Q): input_dir.y -= 1.0
 	
 	var current_speed = boost_speed if Input.is_key_pressed(KEY_SHIFT) else move_speed
+	if global_position.y < 0.0:
+		# Viscous fluid drag while submerged
+		current_speed *= 0.65
+	
 	var forward = -transform.basis.z
 	var right = transform.basis.x
 	var up = Vector3.UP
 	
 	var move_vec = (forward * -input_dir.z + right * input_dir.x + up * input_dir.y).normalized()
 	global_position += move_vec * current_speed * delta
-	global_position.y = maxf(global_position.y, 2.0)
+	global_position.y = maxf(global_position.y, -500.0)
 
 func _capture_screenshot() -> void:
 	if not DirAccess.dir_exists_absolute("res://screenshots"):

@@ -34,7 +34,7 @@ func _process(delta: float) -> void:
 	var frame_time_ms = delta * 1000.0
 	
 	if overlay_label and controller:
-		overlay_label.text = "FPS: %d (%.2f ms) | Preset: %s | Mode: %s | Time: %.1fh\n[1-5] Presets | [6-9] Perf Modes | [RMB Drag] Look | [WASD] Fly | [Shift] Boost" % [
+		overlay_label.text = "FPS: %d (%.2f ms) | Preset: %s | Mode: %s | Time: %.1fh\n[1-5] Weather | [F1-F4] Ocean Presets | [6-9] Perf | [WASD/QE] Move | [Shift] Boost" % [
 			fps,
 			frame_time_ms,
 			CloudController.WeatherPreset.keys()[controller.weather_preset],
@@ -81,6 +81,18 @@ func _process(delta: float) -> void:
 	elif _benchmark_phase == 5 and _frames_recorded >= 330:
 		_capture_screenshot("05_ground_and_contour_fix.png")
 		_benchmark_phase = 6
+		_setup_phase_6_ocean_view()
+
+	# Phase 6: Capture Infinite Ocean Surface & Golden Hour Specular (60 frames)
+	elif _benchmark_phase == 6 and _frames_recorded >= 390:
+		_capture_screenshot("06_infinite_ocean_sunset.png")
+		_benchmark_phase = 7
+		_setup_phase_7_underwater_view()
+
+	# Phase 7: Capture Underwater Physical Scattering & Snell's Window (60 frames)
+	elif _benchmark_phase == 7 and _frames_recorded >= 450:
+		_capture_screenshot("07_underwater_optics.png")
+		_benchmark_phase = 8
 		auto_benchmark = false
 		_finalize_benchmark()
 
@@ -127,6 +139,25 @@ func _setup_phase_5_downward_ground_and_contour() -> void:
 	controller.time_of_day = 14.5
 	camera.global_position = Vector3(0.0, 50.0, 0.0)
 	var look_dir = Vector3(0.0, -0.26, -1.0).normalized()
+	camera.look_at_from_position(camera.global_position, camera.global_position + look_dir, Vector3.UP)
+
+func _setup_phase_6_ocean_view() -> void:
+	print("[BenchmarkHarness] Phase 6: Infinite Ocean Wave & Golden Specular Reflection test...")
+	controller.weather_preset = CloudController.WeatherPreset.GOLDEN_HOUR
+	controller.performance_mode = CloudController.PerformanceMode.MEDIUM
+	controller.time_of_day = 17.5
+	camera.global_position = Vector3(0.0, 15.0, 0.0)
+	var sun_dir = controller._current_sun_direction
+	var look_dir = Vector3(sun_dir.x, -0.15, sun_dir.z).normalized()
+	camera.look_at_from_position(camera.global_position, camera.global_position + look_dir, Vector3.UP)
+
+func _setup_phase_7_underwater_view() -> void:
+	print("[BenchmarkHarness] Phase 7: Underwater Physical Optics & Snell's Window test...")
+	controller.weather_preset = CloudController.WeatherPreset.FAIR_CUMULUS
+	controller.performance_mode = CloudController.PerformanceMode.MEDIUM
+	controller.time_of_day = 13.0
+	camera.global_position = Vector3(0.0, -12.0, 0.0)
+	var look_dir = Vector3(0.2, 0.45, -0.85).normalized()
 	camera.look_at_from_position(camera.global_position, camera.global_position + look_dir, Vector3.UP)
 
 func _capture_screenshot(file_name: String) -> void:

@@ -297,6 +297,37 @@ float sample_cloud_density(vec3 pos_km, float height_norm, vec2 wind_offset_km, 
 	return density;
 }
 
+// Physically-based distant planetary ocean shading
+vec3 compute_distant_ocean(vec3 eye_pos_km, vec3 ray_dir, vec3 sun_dir, vec3 sun_light_color, vec3 sky_color, float t_ground, float time_val) {
+	vec3 hit_p_km = eye_pos_km + ray_dir * t_ground;
+	vec3 N = normalize(hit_p_km); // Planetary sphere normal
+	
+	// Micro-ripples on planetary scale
+	float wave_phase = dot(hit_p_km.xz, vec2(15.0, 11.0)) + time_val * 1.5;
+	vec3 wave_n = normalize(vec3(sin(wave_phase) * 0.04, 1.0, cos(wave_phase) * 0.04));
+	N = normalize(mix(N, wave_n, 0.35));
+	
+	vec3 V = -ray_dir;
+	float NdotV = clamp(dot(N, V), 0.0, 1.0);
+	float f0 = 0.02;
+	float fresnel = f0 + (1.0 - f0) * pow(1.0 - NdotV, 5.0);
+	
+	// Sun Specular (GGX)
+	vec3 H = normalize(sun_dir + V);
+	float NdotH = clamp(dot(N, H), 0.0, 1.0);
+	float alpha2 = 0.02;
+	float denom = (NdotH * NdotH * (alpha2 - 1.0) + 1.0);
+	float D = alpha2 / (3.14159265 * denom * denom + 0.0001);
+	vec3 specular = sun_light_color * D * fresnel * clamp(sun_dir.y * 1.5, 0.0, 1.0) * 0.35;
+	
+	// Deep Ocean Base Color + Fresnel Reflection of Sky
+	vec3 ocean_base = vec3(0.012, 0.065, 0.14) * clamp(sun_dir.y * 0.8 + 0.2, 0.05, 1.0);
+	vec3 reflected_sky = mix(sky_color * 0.85, vec3(0.18, 0.38, 0.65), 0.4);
+	vec3 ocean_surface = mix(ocean_base, reflected_sky, fresnel) + specular;
+	
+	return ocean_surface;
+}
+
 void sky() {
 	vec3 ray_dir = normalize(EYEDIR);
 	vec3 sun_dir = normalize(sun_direction);
@@ -482,16 +513,12 @@ void sky() {
 		if (hit_ground) {
 			float cam_height = length(camera_pos_km) - R_EARTH;
 			float horizon_dip = -sqrt(max(2.0 * cam_height / R_EARTH, 0.0));
-			float ground_sun_n = clamp(sun_dir.y, 0.0, 1.0);
-			vec3 sun_norm = sun_light_color / max(sun_intensity, 1.0);
-			vec3 direct_ground = sun_norm * ground_sun_n * 1.5;
-			vec3 ambient_ground = sky_color * 0.75 + vec3(0.08, 0.09, 0.10);
-			vec3 terrain_lit = ground_color * (direct_ground + ambient_ground);
+			vec3 ocean_surface = compute_distant_ocean(camera_pos_km, ray_dir, sun_dir, sun_light_color, sky_color, t_ground_0, time_val);
 			
 			float g_haze = clamp(1.0 - exp(-t_ground_0 * 0.04 * atmosphere_density), 0.0, 1.0);
 			float horizon_factor = smoothstep(horizon_dip - 0.025, horizon_dip + 0.002, ray_dir.y);
 			float total_haze = max(g_haze, horizon_factor);
-			background = mix(terrain_lit, sky_color, total_haze);
+			background = mix(ocean_surface, sky_color, total_haze);
 		}
 		vec3 final_color = background * transmittance + accumulated_cloud_color + direct_sun_disc;
 		COLOR = apply_tonemapping(final_color, exposure, tonemap_mode, white_point);
@@ -500,16 +527,12 @@ void sky() {
 		if (hit_ground) {
 			float cam_height = length(camera_pos_km) - R_EARTH;
 			float horizon_dip = -sqrt(max(2.0 * cam_height / R_EARTH, 0.0));
-			float ground_sun_n = clamp(sun_dir.y, 0.0, 1.0);
-			vec3 sun_norm = sun_light_color / max(sun_intensity, 1.0);
-			vec3 direct_ground = sun_norm * ground_sun_n * 1.5;
-			vec3 ambient_ground = sky_color * 0.75 + vec3(0.08, 0.09, 0.10);
-			vec3 terrain_lit = ground_color * (direct_ground + ambient_ground);
+			vec3 ocean_surface = compute_distant_ocean(camera_pos_km, ray_dir, sun_dir, sun_light_color, sky_color, t_ground_0, time_val);
 			
 			float g_haze = clamp(1.0 - exp(-t_ground_0 * 0.04 * atmosphere_density), 0.0, 1.0);
 			float horizon_factor = smoothstep(horizon_dip - 0.025, horizon_dip + 0.002, ray_dir.y);
 			float total_haze = max(g_haze, horizon_factor);
-			base_surface = mix(terrain_lit, sky_color, total_haze);
+			base_surface = mix(ocean_surface, sky_color, total_haze);
 		}
 		vec3 final_color = base_surface + sun_disc_color;
 		COLOR = apply_tonemapping(final_color, exposure, tonemap_mode, white_point);

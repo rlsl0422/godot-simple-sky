@@ -7,6 +7,7 @@
 [ext_resource type="ImageTexture3D" path="res://assets/noises/cloud_detail_3d.res" id="3_fkctd"]
 [ext_resource type="Script" uid="uid://dku7v5ouidj7f" path="res://scripts/benchmark_harness.gd" id="4_benchmark"]
 [ext_resource type="Texture2D" path="res://assets/noises/weather_map_2d.res" id="4_ipc0k"]
+[ext_resource type="Script" path="res://scripts/ocean_controller.gd" id="5_ocean"]
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_sky"]
 shader = ExtResource("1_shader")
@@ -74,12 +75,13 @@ transform = Transform3D(-0.83920294, -0.39802724, 0.3705575, 0, 0.6813994, 0.731
 light_color = Color(1, 0.96, 0.9, 1)
 shadow_enabled = true
 
-[node name="Camera3D" type="Camera3D" parent="." unique_id=1864530205 node_paths=PackedStringArray("controller_node")]
+[node name="Camera3D" type="Camera3D" parent="." unique_id=1864530205 node_paths=PackedStringArray("controller_node", "ocean_controller")]
 transform = Transform3D(1, 0, 0, 0, 0.906308, -0.422618, 0, 0.422618, 0.906308, 0, 50, 0)
 current = true
 far = 100000.0
 script = ExtResource("2_camera")
 controller_node = NodePath("../AtmosphereCloudController")
+ocean_controller = NodePath("../OceanController")
 
 [node name="AtmosphereCloudController" type="Node" parent="." unique_id=264721055 node_paths=PackedStringArray("world_environment", "sun_light")]
 script = ExtResource("3_controller")
@@ -114,3 +116,9 @@ controller = NodePath("../AtmosphereCloudController")
 camera = NodePath("../Camera3D")
 auto_benchmark = false
 overlay_label = NodePath("../CanvasLayer/StatsLabel")
+
+[node name="OceanController" type="Node3D" parent="." node_paths=PackedStringArray("atmosphere_controller", "camera")]
+script = ExtResource("5_ocean")
+atmosphere_controller = NodePath("../AtmosphereCloudController")
+camera = NodePath("../Camera3D")
+
