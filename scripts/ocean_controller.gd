@@ -140,6 +140,23 @@ enum OceanPreset {
 		underwater_max_visibility = val
 		_update_underwater_uniform("max_visibility_meters", val)
 
+@export_group("Godrays")
+@export_range(0.0, 5.0, 0.1) var godray_intensity: float = 2.4:
+	set(val):
+		godray_intensity = val
+		_update_underwater_uniform("godray_intensity", val)
+
+@export_group("Horizon & Distance Fade")
+@export_range(500.0, 4000.0, 50.0) var fade_inner_radius: float = 1400.0:
+	set(val):
+		fade_inner_radius = val
+		_update_ocean_uniform("fade_inner_radius", val)
+
+@export_range(800.0, 5000.0, 50.0) var fade_outer_radius: float = 2400.0:
+	set(val):
+		fade_outer_radius = val
+		_update_ocean_uniform("fade_outer_radius", val)
+
 # Internal Grid Configuration
 const GRID_SIZE: float = 6000.0
 const GRID_SUBDIVISIONS: int = 256
@@ -199,7 +216,8 @@ func _init_ocean_mesh() -> void:
 
 	_ocean_mat = ocean_mesh_instance.material_override as ShaderMaterial
 	if _ocean_mat:
-		_ocean_mat.set_shader_parameter("mesh_radius", GRID_SIZE * 0.5)
+		_ocean_mat.set_shader_parameter("fade_inner_radius", fade_inner_radius)
+		_ocean_mat.set_shader_parameter("fade_outer_radius", fade_outer_radius)
 
 func _init_underwater_quad() -> void:
 	if not underwater_quad:
@@ -271,11 +289,14 @@ func _sync_all_uniforms() -> void:
 	_update_ocean_uniform("crest_foam_threshold", crest_foam_threshold)
 	_update_ocean_uniform("crest_foam_intensity", crest_foam_intensity)
 	_update_ocean_uniform("contact_foam_distance", contact_foam_distance)
+	_update_ocean_uniform("fade_inner_radius", fade_inner_radius)
+	_update_ocean_uniform("fade_outer_radius", fade_outer_radius)
 
 	_update_underwater_uniform("water_scatter_color", Vector3(underwater_scatter_color.r, underwater_scatter_color.g, underwater_scatter_color.b))
 	_update_underwater_uniform("turbidity", underwater_turbidity)
 	_update_underwater_uniform("caustics_strength", caustics_strength)
 	_update_underwater_uniform("max_visibility_meters", underwater_max_visibility)
+	_update_underwater_uniform("godray_intensity", godray_intensity)
 
 func _update_ocean_uniform(param: String, value: Variant) -> void:
 	if _ocean_mat:

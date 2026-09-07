@@ -152,12 +152,13 @@ func _setup_phase_6_ocean_view() -> void:
 	camera.look_at_from_position(camera.global_position, camera.global_position + look_dir, Vector3.UP)
 
 func _setup_phase_7_underwater_view() -> void:
-	print("[BenchmarkHarness] Phase 7: Underwater Physical Optics & Snell's Window test...")
-	controller.weather_preset = CloudController.WeatherPreset.FAIR_CUMULUS
+	print("[BenchmarkHarness] Phase 7: Underwater Physical Optics & Godrays test...")
+	controller.weather_preset = CloudController.WeatherPreset.CLEAR_SKY
 	controller.performance_mode = CloudController.PerformanceMode.MEDIUM
 	controller.time_of_day = 13.0
-	camera.global_position = Vector3(0.0, -12.0, 0.0)
-	var look_dir = Vector3(0.2, 0.45, -0.85).normalized()
+	camera.global_position = Vector3(0.0, -8.0, 0.0)
+	var sun_dir = controller._current_sun_direction
+	var look_dir = (sun_dir * 0.75 + Vector3(0.0, 0.45, 0.0)).normalized()
 	camera.look_at_from_position(camera.global_position, camera.global_position + look_dir, Vector3.UP)
 
 func _capture_screenshot(file_name: String) -> void:
