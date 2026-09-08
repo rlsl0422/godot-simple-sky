@@ -274,11 +274,11 @@ func _update_wind() -> void:
 func _apply_performance_mode(mode: PerformanceMode) -> void:
 	match mode:
 		PerformanceMode.LOW:
-			_update_material_uniform("max_steps", 28)
-			_update_material_uniform("max_light_steps", 3)
-			_update_material_uniform("empty_skip_multiplier", 1.25)
-			_update_material_uniform("max_distance_km", 22.0)
-			_update_material_uniform("detail_lod_distance_km", 8.0)
+			_update_material_uniform("max_steps", 30)
+			_update_material_uniform("max_light_steps", 2)
+			_update_material_uniform("empty_skip_multiplier", 1.4)
+			_update_material_uniform("max_distance_km", 28.0)
+			_update_material_uniform("detail_lod_distance_km", 6.0)
 		PerformanceMode.MEDIUM:
 			# Golden cross default (~50-60 FPS on MX450)
 			_update_material_uniform("max_steps", 34)

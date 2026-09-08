@@ -58,8 +58,8 @@ uniform float silver_lining_spread : hint_range(0.5, 0.999, 0.001) = 0.95;
 uniform float silver_lining_intensity : hint_range(0.0, 5.0, 0.1) = 2.4;
 uniform float powder_effect_strength : hint_range(0.0, 2.0, 0.05) = 1.0;
 uniform float ambient_intensity : hint_range(0.0, 3.0, 0.05) = 0.85;
-uniform vec3 cloud_base_color : source_color = vec3(0.94, 0.95, 0.98);
-uniform vec3 cloud_ambient_color : source_color = vec3(0.42, 0.50, 0.65);
+uniform vec3 cloud_base_color : source_color = vec3(0.96, 0.97, 1.0);
+uniform vec3 cloud_ambient_color : source_color = vec3(0.65, 0.72, 0.85);
 
 // ==========================================
 // UNIFORMS: QUALITY & PERFORMANCE (GOLDEN CROSS)
@@ -310,7 +310,7 @@ float sample_cloud_density(vec3 pos_km, float height_norm, vec2 wind_offset_km, 
 	
 	// 5. Density thresholding with smooth yet plump condensation boundary
 	float cov_threshold = mix(0.18, 0.13, core_preservation);
-	float density = smoothstep(cov_threshold, cov_threshold + 0.18, cloud_mass) * cloud_density_multiplier * 3.4;
+	float density = smoothstep(cov_threshold, cov_threshold + 0.22, cloud_mass) * cloud_density_multiplier * 3.4;
 	
 	// 6. Micro-detail erosion: active on upper billows, suppressed on cloud base for velvety smooth underside
 	if (density > 0.005 && detail_fade > 0.01) {
@@ -320,7 +320,7 @@ float sample_cloud_density(vec3 pos_km, float height_norm, vec2 wind_offset_km, 
 		float erosion = mix(detail_fbm, 1.0 - detail_fbm, clamp(height_norm * 0.5, 0.0, 1.0));
 		float base_suppress = smoothstep(0.08, 0.32, height_norm); // Velvety smooth cloud base
 		float edge_mask = clamp(1.0 - density * 0.30, 0.0, 1.0);
-		float erode_amount = erosion * detail_strength * 0.28 * detail_fade * edge_mask * base_suppress;
+		float erode_amount = erosion * detail_strength * 0.22 * detail_fade * edge_mask * base_suppress;
 		density = smoothstep(erode_amount, 1.0, density) * density;
 	}
 	
@@ -449,10 +449,10 @@ void sky() {
 		float march_length = t_end - t_start;
 		float base_step = march_length / float(max_steps);
 		
-		// Low-discrepancy screen-space ray jitter using Interleaved Gradient Noise (Jimenez 2014)
-		// Full [0, 1] range completely destroys all slice alignment and staircase terracing (Fixes Feedback 4)
-		float dither = get_ign(FRAGCOORD.xy);
-		float current_t = t_start + base_step * dither;
+		// Centered low-discrepancy ray jitter (Jimenez 2014)
+		// Damped jitter eliminates screen-door mesh and jagged edge serration while preventing slice alignment
+		float dither = (get_ign(FRAGCOORD.xy) - 0.5) * 0.40;
+		float current_t = t_start + base_step * (0.5 + dither);
 		
 		vec3 accumulated_cloud_color = vec3(0.0);
 		float transmittance = 1.0;
@@ -478,12 +478,6 @@ void sky() {
 			density *= horizon_fade;
 			
 			if (density > 0.001) {
-				// Step refinement: if entering cloud on a skipped step, step back to accurately resolve boundary
-				if (consecutive_zeros > 2) {
-					current_t -= (empty_skip_multiplier - 1.0) * base_step * 0.5;
-					consecutive_zeros = 0;
-					continue;
-				}
 				consecutive_zeros = 0;
 				
 				// Progressive multi-scale light marching toward sun (in km):
@@ -502,25 +496,25 @@ void sky() {
 					
 					float l_dens = sample_cloud_density(light_pos_world, l_height_norm, wind_offset_km, 0.0);
 					if (j == 0) l_dens_first = l_dens;
-					optical_depth_sun += l_dens * l_weights[idx] * 8.5;
+					optical_depth_sun += l_dens * l_weights[idx] * 4.2;
 				}
 				
 				// Smooth light attenuation without binary cliffs (eliminates salt-and-pepper shadow grain)
-				float beer = exp(-optical_depth_sun * 0.60);
-				float powder = 1.0 - exp(-optical_depth_sun * 1.6 * powder_effect_strength);
-				float sun_light_attenuation = beer * mix(1.0, powder, 0.55);
+				float beer = exp(-optical_depth_sun * 0.38);
+				float powder = 1.0 - exp(-optical_depth_sun * 1.5 * powder_effect_strength);
+				float sun_light_attenuation = beer * mix(1.0, powder, 0.60);
 				
 				// Directional lobe curvature / micro-crevice shadowing (enhances "몽글몽글" spherical puffiness)
-				float lobe_curvature = clamp(1.0 - (l_dens_first - density * 0.7) * 0.25, 0.65, 1.15);
+				float lobe_curvature = clamp(1.0 - (l_dens_first - density * 0.6) * 0.20, 0.75, 1.15);
 				
-				// Multiple forward scattering softens shadow underbelly like real clouds in reference photo
-				float multi_scatter = exp(-optical_depth_sun * 0.12) * 0.45;
+				// Multiple forward scattering softens shadow underbelly (luminous pearl-white bounce)
+				float multi_scatter = exp(-optical_depth_sun * 0.065) * 0.60;
 				
-				// Hemispherical ambient lighting: blue skylight from above + deep oceanic bounce from below
-				float crevice_ao = clamp(1.0 - density * 0.25, 0.35, 1.0);
-				vec3 sky_ambient = sky_color * 0.65 + cloud_ambient_color * 0.70;
-				vec3 ocean_ambient = deep_water_color * 0.50 + vec3(0.02, 0.04, 0.06);
-				vec3 ambient = mix(ocean_ambient, sky_ambient, clamp(height_norm * 1.3, 0.0, 1.0)) * ambient_intensity * crevice_ao;
+				// Hemispherical ambient lighting: soft skylight from above + luminous diffuse daylight bounce from ocean
+				float crevice_ao = clamp(1.0 - density * 0.18, 0.45, 1.0);
+				vec3 sky_ambient = sky_color * 0.85 + cloud_ambient_color * 0.80;
+				vec3 ocean_ambient = mix(deep_water_color * 1.6, sky_color, 0.65) + vec3(0.18, 0.22, 0.26);
+				vec3 ambient = mix(ocean_ambient, sky_ambient, clamp(height_norm * 1.2, 0.15, 1.0)) * ambient_intensity * crevice_ao;
 				
 				vec3 sun_normalized = sun_light_color / max(sun_intensity, 1.0);
 				float phase_term = phase_cloud + silver_lining * 0.45;
@@ -528,8 +522,8 @@ void sky() {
 				vec3 direct_sun = sun_normalized * direct_lighting * 1.6;
 				vec3 step_energy = (direct_sun + ambient) * cloud_base_color;
 				
-				// Soft, physically plausible volumetric extinction
-				float sample_step_extinction = density * base_step * 8.0;
+				// Soft, physically plausible volumetric extinction (bounded to prevent harsh single-step opacity banding)
+				float sample_step_extinction = density * min(base_step, 0.20) * 5.2;
 				float sample_transmittance = exp(-sample_step_extinction);
 				
 				accumulated_cloud_color += step_energy * (1.0 - sample_transmittance) * transmittance;
