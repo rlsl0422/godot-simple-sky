@@ -22,29 +22,31 @@ static func get_or_create_ocean_normal() -> ImageTexture:
 	return _cached_ocean_normal
 
 static func generate_ocean_normal(save_to_disk: bool = true) -> ImageTexture:
-	print("[OceanNoiseGenerator] Generating %dx%d Ocean Wave Normal Texture..." % [TEXTURE_SIZE, TEXTURE_SIZE])
+	print("[OceanNoiseGenerator] Generating %dx%d Seamless Simplex Ocean Wave Normal..." % [TEXTURE_SIZE, TEXTURE_SIZE])
 	var start_time := Time.get_ticks_msec()
+	var size := TEXTURE_SIZE
 
 	var simplex := FastNoiseLite.new()
 	simplex.noise_type = FastNoiseLite.TYPE_SIMPLEX_SMOOTH
-	simplex.frequency = 0.02
+	simplex.frequency = 0.018
 	simplex.fractal_octaves = 4
 	simplex.fractal_lacunarity = 2.1
-	simplex.fractal_gain = 0.5
+	simplex.fractal_gain = 0.50
+	simplex.seed = 83921
 
-	var size := TEXTURE_SIZE
 	var height_data := PackedFloat32Array()
 	height_data.resize(size * size)
 
+	var f_size := float(size)
 	for y in range(size):
+		var fy := float(y)
 		for x in range(size):
 			var fx := float(x)
-			var fy := float(y)
-			var s_val := _sample_seamless_2d(simplex, fx, fy, size)
-			height_data[y * size + x] = s_val
+			var h_val := _sample_seamless_2d(simplex, fx, fy, f_size)
+			height_data[y * size + x] = h_val
 
-	var img := Image.create(size, size, true, Image.FORMAT_RGBA8)
-	var bump_strength := 5.0
+	var img := Image.create(size, size, false, Image.FORMAT_RGBA8)
+	var bump_strength := 2.5 # Silky, soft ocean ripples without harsh faceting
 
 	for y in range(size):
 		var y_prev := (y - 1 + size) % size
@@ -61,18 +63,22 @@ static func generate_ocean_normal(save_to_disk: bool = true) -> ImageTexture:
 			var dx := (h_r - h_l) * bump_strength
 			var dy := (h_u - h_d) * bump_strength
 
-			var norm := Vector3(-dx, -dy, 1.0).normalized()
+			var len_sq := dx * dx + dy * dy + 1.0
+			var inv_len := 1.0 / sqrt(len_sq)
+			var nx := -dx * inv_len
+			var ny := -dy * inv_len
+			var nz := 1.0 * inv_len
 
-			var r := int(clampf((norm.x * 0.5 + 0.5) * 255.0, 0.0, 255.0))
-			var g := int(clampf((norm.y * 0.5 + 0.5) * 255.0, 0.0, 255.0))
-			var b := int(clampf((norm.z * 0.5 + 0.5) * 255.0, 0.0, 255.0))
+			var r := int(clampf((nx * 0.5 + 0.5) * 255.0, 0.0, 255.0))
+			var g := int(clampf((ny * 0.5 + 0.5) * 255.0, 0.0, 255.0))
+			var b := int(clampf((nz * 0.5 + 0.5) * 255.0, 0.0, 255.0))
 
 			img.set_pixel(x, y, Color8(r, g, b, 255))
 
 	img.generate_mipmaps()
 	var tex := ImageTexture.create_from_image(img)
 	var elapsed := Time.get_ticks_msec() - start_time
-	print("[OceanNoiseGenerator] Ocean Wave Normal generated in %d ms." % elapsed)
+	print("[OceanNoiseGenerator] Seamless Ocean Wave Normal generated in %d ms." % elapsed)
 
 	if save_to_disk:
 		var dir := DirAccess.open("res://")
@@ -83,15 +89,20 @@ static func generate_ocean_normal(save_to_disk: bool = true) -> ImageTexture:
 
 	return tex
 
-static func _sample_seamless_2d(noise: FastNoiseLite, x: float, y: float, size: int) -> float:
-	var nx := x / float(size)
-	var ny := y / float(size)
-	var pi2 := TAU
-	var angle_x := nx * pi2
-	var angle_y := ny * pi2
-	var r := float(size) / (pi2 * 10.0)
-	var x1 := r * cos(angle_x)
-	var y1 := r * sin(angle_x)
-	var x2 := r * cos(angle_y)
-	var y2 := r * sin(angle_y)
-	return (noise.get_noise_2d(x1, y1) + noise.get_noise_2d(x2 + 73.1, y2 + 91.7)) * 0.5
+static func _sample_seamless_2d(noise: FastNoiseLite, x: float, y: float, size: float) -> float:
+	var u := x / size
+	var v := y / size
+	# Quintic C1 polynomial: 6t^5 - 15t^4 + 10t^3
+	var su := u * u * u * (u * (u * 6.0 - 15.0) + 10.0)
+	var sv := v * v * v * (v * (v * 6.0 - 15.0) + 10.0)
+
+	var n00 := noise.get_noise_2d(x, y)
+	var n10 := noise.get_noise_2d(x - size, y)
+	var n01 := noise.get_noise_2d(x, y - size)
+	var n11 := noise.get_noise_2d(x - size, y - size)
+
+	var top := lerpf(n00, n10, su)
+	var bot := lerpf(n01, n11, su)
+	return lerpf(top, bot, sv)
+
+

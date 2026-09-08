@@ -82,20 +82,20 @@ enum OceanPreset {
 # EXPORTS: WATER OPTICS & COLORS
 # ==========================================
 @export_group("Water Optics")
-## 깊은 수심의 본체 색상. 태양광/하늘빛이 물속으로 투과되어 상향 산란(Upwelling)되는 대양 고유의 감청색/코발트 블루를 결정합니다.
-@export var deep_water_color: Color = Color(0.012, 0.080, 0.22):
+## 깊은 수심의 본체 색상. 태양광/하늘빛이 물속으로 투과되어 상향 산란(Upwelling)되는 대양 고유의 깊은 인디고/사파이어 블루를 결정합니다.
+@export var deep_water_color: Color = Color(0.006, 0.040, 0.115):
 	set(val):
 		deep_water_color = val
 		_update_ocean_uniform("deep_water_color", Vector3(val.r, val.g, val.b))
 
-## 얕은 수심의 물 색상. 해안선이나 얕은 수중 물체 주변에서 투과율이 높을 때 나타나는 밝은 청록빛을 결정합니다.
-@export var shallow_water_color: Color = Color(0.04, 0.32, 0.48):
+## 얕은 수심의 물 색상. 해안선이나 얕은 수중 물체 주변에서 투과율이 높을 때 나타나는 자연스러운 청록빛 틴트를 결정합니다.
+@export var shallow_water_color: Color = Color(0.015, 0.12, 0.18):
 	set(val):
 		shallow_water_color = val
 		_update_ocean_uniform("shallow_water_color", Vector3(val.r, val.g, val.b))
 
 ## 파도마루의 표면하 산란(SSS) 투과 색상. 태양 역광 시 얇은 파도 능선을 투과하는 자연스러운 에메랄드/아쿠아마린 색조를 설정합니다.
-@export var sss_color: Color = Color(0.03, 0.28, 0.32):
+@export var sss_color: Color = Color(0.015, 0.16, 0.18):
 	set(val):
 		sss_color = val
 		_update_ocean_uniform("sss_color", Vector3(val.r, val.g, val.b))
@@ -395,10 +395,11 @@ func _apply_ocean_preset(preset: OceanPreset) -> void:
 			wave_length = 20.0
 			wave_speed = 0.8
 			wave_steepness = 0.35
+			deep_water_color = Color(0.005, 0.038, 0.090)
 			water_clarity = 35.0
 			surface_roughness = 0.03
 			crest_foam_intensity = 0.2
-			sss_intensity = 1.0
+			sss_intensity = 0.8
 			underwater_turbidity = 0.012
 			caustics_strength = 1.0
 
@@ -407,8 +408,9 @@ func _apply_ocean_preset(preset: OceanPreset) -> void:
 			wave_length = 38.0
 			wave_speed = 1.2
 			wave_steepness = 0.55
+			deep_water_color = Color(0.007, 0.045, 0.125)
 			water_clarity = 22.0
-			surface_roughness = 0.08
+			surface_roughness = 0.06
 			crest_foam_threshold = 0.74
 			crest_foam_intensity = 1.1
 			sss_intensity = 0.9
@@ -420,11 +422,12 @@ func _apply_ocean_preset(preset: OceanPreset) -> void:
 			wave_length = 55.0
 			wave_speed = 1.8
 			wave_steepness = 0.72
+			deep_water_color = Color(0.006, 0.040, 0.115)
 			water_clarity = 15.0
-			surface_roughness = 0.12
+			surface_roughness = 0.08
 			crest_foam_threshold = 0.52
-			crest_foam_intensity = 2.2
-			sss_intensity = 1.2
+			crest_foam_intensity = 2.0
+			sss_intensity = 1.1
 			underwater_turbidity = 0.045
 			caustics_strength = 0.5
 
@@ -433,11 +436,12 @@ func _apply_ocean_preset(preset: OceanPreset) -> void:
 			wave_length = 80.0
 			wave_speed = 2.5
 			wave_steepness = 0.85
+			deep_water_color = Color(0.003, 0.020, 0.055)
 			water_clarity = 8.0
-			surface_roughness = 0.18
+			surface_roughness = 0.15
 			crest_foam_threshold = 0.40
-			crest_foam_intensity = 2.8
-			sss_intensity = 1.0
+			crest_foam_intensity = 2.6
+			sss_intensity = 0.9
 			underwater_turbidity = 0.075
 			caustics_strength = 0.2
 

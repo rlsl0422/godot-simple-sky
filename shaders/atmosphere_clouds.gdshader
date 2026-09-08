@@ -351,8 +351,8 @@ vec3 compute_distant_ocean(vec3 eye_pos_km, vec3 ray_dir, vec3 sun_dir, vec3 sun
 	vec3 specular = sun_light_color * D * fresnel * clamp(sun_dir.y * 1.5, 0.0, 1.0) * 0.35;
 	
 	// Deep Ocean Base Color + Fresnel Reflection of Sky
-	vec3 diffuse_water = deep_water_color * (sun_light_color * 0.06 * clamp(sun_dir.y, 0.1, 1.0) + sky_color * 0.8) + vec3(0.006, 0.035, 0.085);
-	vec3 reflected_sky = mix(sky_color * 0.85, vec3(0.18, 0.38, 0.65), 0.4);
+	vec3 diffuse_water = deep_water_color * (sun_light_color * 0.07 * clamp(sun_dir.y, 0.05, 1.0) + sky_color * 0.70);
+	vec3 reflected_sky = mix(sky_color * 0.75, vec3(0.18, 0.38, 0.65), 0.45);
 	vec3 ocean_surface = mix(diffuse_water, reflected_sky, fresnel) + specular;
 	
 	return ocean_surface;

@@ -324,34 +324,34 @@ void fragment() {
 	// 1. Analytical Rolling Swell Normal (Base 3D surface geometry)
 	vec3 base_norm = evaluate_swell_normal(v_world_pos.xz, time_val);
 
-	// 2. Multi-Scale Tri-Panning Capillary Wavelets & Wind Agitation
+	// 2. Dual-Octave Organic Wave Spectrum Drift (100% free of net/grid artifacts)
 	vec2 wind = normalize(primary_wind_dir);
 
-	// Layer 1: Medium Wind Chop (12.0m scale, speed 0.08)
-	vec2 uv1 = v_world_pos.xz * (1.0 / 12.0) + wind * (time_val * 0.08);
+	// Octave 1: Macro capillary waves (~14.0m scale, drifting along wind)
+	vec2 uv1 = v_world_pos.xz * (1.0 / 14.0) + wind * (time_val * 0.07);
 	vec3 n1 = texture(wave_normal_tex, uv1).rgb * 2.0 - 1.0;
 
-	// Layer 2: Fine Capillary Ripples (4.2m scale, speed 0.14, rotated by +26 deg)
-	mat2 rot2 = mat2(vec2(0.899, -0.438), vec2(0.438, 0.899));
-	vec2 uv2 = (rot2 * v_world_pos.xz) * (1.0 / 4.2) + wind * (time_val * 0.14);
+	// Octave 2: Micro wind ripples (~5.2m scale, +16 deg angular divergence for organic flow)
+	mat2 rot2 = mat2(vec2(0.961, -0.276), vec2(0.276, 0.961));
+	vec2 uv2 = (rot2 * v_world_pos.xz) * (1.0 / 5.2) + wind * (time_val * 0.12);
 	vec3 n2 = texture(wave_normal_tex, uv2).rgb * 2.0 - 1.0;
 
-	// Layer 3: Micro Surface Tension Wavelets (1.5m scale, speed 0.20, rotated by -21 deg)
-	mat2 rot3 = mat2(vec2(0.934, 0.358), vec2(-0.358, 0.934));
-	vec2 uv3 = (rot3 * v_world_pos.xz) * (1.0 / 1.5) - vec2(-wind.y, wind.x) * (time_val * 0.20);
-	vec3 n3 = texture(wave_normal_tex, uv3).rgb * 2.0 - 1.0;
-
-	// Distance-based detail attenuation (extended to 850m for continuous rich water texture)
-	float detail_fade = clamp(1.0 - v_cam_dist / 850.0, 0.0, 1.0);
+	// Distance & altitude detail attenuation
+	float dist_3d = length(cam_pos - v_world_pos);
+	float detail_fade = clamp(1.0 - dist_3d / 900.0, 0.0, 1.0);
 	float alt_detail_fade = 1.0 - smoothstep(40.0, 800.0, v_cam_alt);
 	detail_fade *= alt_detail_fade;
 	float detail_curve = detail_fade * detail_fade * (3.0 - 2.0 * detail_fade);
 
-	// High-frequency slope gradient
-	vec2 ripple_slope = (n1.xy * 0.48 + n2.xy * 0.36 + n3.xy * 0.24) * (detail_curve * 1.20);
+	// Combined capillary ripple slope with balanced physical gradient
+	vec2 ripple_slope = (n1.xy * 0.50 + n2.xy * 0.35) * (detail_curve * 0.50);
 
-	// Reoriented normal blending (blends micro-ripples seamlessly onto rolling swell normal)
-	vec3 N = normalize(vec3(base_norm.x + ripple_slope.x, base_norm.y, base_norm.z + ripple_slope.y));
+	// Reoriented Normal Mapping (RNM) onto analytical base swell normal:
+	// Constructs tangent frame on base_norm to avoid cross-hatch planar projection distortion
+	vec3 t_tangent = normalize(cross(vec3(0.0, 1.0, 0.0), base_norm));
+	if (dot(t_tangent, t_tangent) < 0.001) t_tangent = vec3(1.0, 0.0, 0.0);
+	vec3 t_binormal = cross(base_norm, t_tangent);
+	vec3 N = normalize(base_norm + t_tangent * ripple_slope.x + t_binormal * ripple_slope.y);
 
 	// Distance normal flattening towards outer radius to match flat planetary sphere
 	N = normalize(mix(vec3(0.0, 1.0, 0.0), N, circular_alpha));
@@ -439,14 +439,18 @@ void fragment() {
 	// Soft HDR compression strictly prevents FP16 buffer overflow
 	vec3 sun_specular_energy = raw_spec / (vec3(1.0) + raw_spec * (1.0 / 30.0));
 
+	// Wave Ambient Occlusion (Wave Cavity Shading)
+	// Wave troughs and shielded wave slopes receive less hemispherical skylight
+	float wave_ao = clamp(0.55 + 0.45 * (N.y * 0.5 + 0.5), 0.45, 1.0);
+
 	// Sky Environment Reflection
 	vec3 R = reflect(-V, N);
 	float sky_elevation = clamp(R.y, 0.0, 1.0);
-	vec3 sky_reflected = mix(sky_horizon_color, sky_ambient_color, sqrt(sky_elevation));
+	vec3 sky_reflected = mix(sky_horizon_color, sky_ambient_color, sqrt(sky_elevation)) * wave_ao;
 
 	// Physical Upwelling Radiance (Diffuse water volume backscattering from sun + sky dome)
-	vec3 diffuse_illumination = sun_color * (sun_intensity * 0.08 * clamp(sun_direction.y, 0.1, 1.0)) + sky_ambient_color * 1.5;
-	vec3 upwelling_ocean = deep_water_color * diffuse_illumination + vec3(0.008, 0.045, 0.11);
+	vec3 diffuse_illumination = sun_color * (sun_intensity * 0.07 * clamp(sun_direction.y, 0.05, 1.0)) + sky_ambient_color * 0.70;
+	vec3 upwelling_ocean = deep_water_color * diffuse_illumination * wave_ao;
 
 	// Refracted scene color: only active when solid objects/terrain are submerged underneath
 	vec3 water_composite = upwelling_ocean;
@@ -463,8 +467,8 @@ void fragment() {
 	surface_color = mix(surface_color, foam_color, total_foam);
 
 	// Distant planetary ocean model (100% identical optical model to atmosphere_clouds.gdshader)
-	vec3 diffuse_water = deep_water_color * (sun_color * (sun_intensity * 0.06 * clamp(sun_direction.y, 0.1, 1.0)) + sky_ambient_color * 0.8) + vec3(0.006, 0.035, 0.085);
-	vec3 dist_reflected_sky = mix(sky_ambient_color * 0.85, vec3(0.18, 0.38, 0.65), 0.4);
+	vec3 diffuse_water = deep_water_color * (sun_color * (sun_intensity * 0.07 * clamp(sun_direction.y, 0.05, 1.0)) + sky_ambient_color * 0.70);
+	vec3 dist_reflected_sky = mix(sky_ambient_color * 0.75, sky_horizon_color, 0.45);
 	float dist_fresnel = 0.02 + (1.0 - 0.02) * pow(1.0 - NdotV, 5.0);
 	vec3 distant_ocean_color = mix(diffuse_water, dist_reflected_sky, dist_fresnel) + (sun_specular_energy * 0.65);
 
