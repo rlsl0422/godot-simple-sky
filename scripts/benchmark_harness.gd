@@ -145,12 +145,12 @@ func _setup_phase_4_above_clouds() -> void:
 	camera.look_at_from_position(camera.global_position, camera.global_position + look_dir, Vector3.UP)
 
 func _setup_phase_5_downward_ground_and_contour() -> void:
-	print("[BenchmarkHarness] Phase 5: Testing downward ground and cloud contour at 14.5h...")
+	print("[BenchmarkHarness] Phase 5: Testing high-altitude downward ocean blending at 2200m (14.5h, matching user screenshot)...")
 	controller.weather_preset = CloudController.WeatherPreset.FAIR_CUMULUS
 	controller.performance_mode = CloudController.PerformanceMode.MEDIUM
 	controller.time_of_day = 14.5
-	camera.global_position = Vector3(0.0, 50.0, 0.0)
-	var look_dir = Vector3(0.0, -0.26, -1.0).normalized()
+	camera.global_position = Vector3(0.0, 2200.0, 0.0)
+	var look_dir = Vector3(0.0, -0.75, -0.66).normalized()
 	camera.look_at_from_position(camera.global_position, camera.global_position + look_dir, Vector3.UP)
 
 func _setup_phase_6_ocean_view() -> void:

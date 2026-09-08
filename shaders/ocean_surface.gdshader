@@ -63,6 +63,14 @@ uniform float fade_inner_radius : hint_range(500.0, 5000.0, 50.0) = 1400.0;
 uniform float fade_outer_radius : hint_range(800.0, 6000.0, 50.0) = 2400.0;
 uniform float custom_time = 0.0;
 
+// ==========================================
+// UNIFORMS: POST PROCESSING & TONE MAPPING
+// ==========================================
+group_uniforms Post_Processing;
+uniform int tonemap_mode : hint_range(0, 3, 1) = 1;
+uniform float exposure : hint_range(0.1, 4.0, 0.05) = 1.0;
+uniform float white_point : hint_range(1.0, 20.0, 0.5) = 6.0;
+
 uniform sampler2D wave_normal_tex : hint_normal, filter_linear_mipmap;
 uniform sampler2D depth_texture : hint_depth_texture, filter_nearest;
 uniform sampler2D screen_texture : hint_screen_texture, filter_linear_mipmap;
@@ -72,6 +80,26 @@ varying vec3 v_analytical_normal;
 varying float v_wave_crest;
 varying float v_wave_fold;
 varying float v_cam_dist;
+varying float v_cam_alt;
+
+// Photographic Tone Mapping & Exposure Pipeline (Matching atmosphere_clouds.gdshader)
+vec3 apply_tonemapping(vec3 color, float exp_val, int mode, float wp) {
+	vec3 x = color * exp_val;
+	if (mode == 1) {
+		const float a = 2.51;
+		const float b = 0.03;
+		const float c = 2.43;
+		const float d = 0.59;
+		const float e = 0.14;
+		return clamp((x * (a * x + b)) / (x * (c * x + d) + e), 0.0, 1.0);
+	} else if (mode == 2) {
+		return (x * (1.0 + x / (wp * wp))) / (1.0 + x);
+	} else if (mode == 3) {
+		vec3 cur = max(vec3(0.0), x - 0.004);
+		return (cur * (6.2 * cur + 0.5)) / (cur * (6.2 * cur + 1.7) + 0.06);
+	}
+	return x;
+}
 
 // =========================================================================
 // 4-HARMONIC CURVILINEAR GERSTNER SWELL ENGINE
@@ -250,9 +278,13 @@ void vertex() {
 	vec3 cam_pos = (INV_VIEW_MATRIX * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
 	float cam_dist = length(world_v.xz - cam_pos.xz);
 	v_cam_dist = cam_dist;
+	float alt = max(cam_pos.y, 0.0);
+	v_cam_alt = alt;
 
 	// Smooth vertex wave fade towards boundary to seamlessly match flat planetary horizon
 	float dist_wave_fade = smoothstep(fade_outer_radius, fade_inner_radius, cam_dist);
+	// Altitude wave fade: smoothly flatten 3D vertex wave displacement as camera ascends into the sky (30m - 1000m)
+	float altitude_wave_fade = 1.0 - smoothstep(30.0, 1000.0, alt);
 
 	vec3 disp;
 	vec3 norm;
@@ -260,7 +292,7 @@ void vertex() {
 	float crest_fold;
 	evaluate_swells_vertex(world_v.xz, time_val, disp, norm, crest_h, crest_fold);
 
-	disp *= dist_wave_fade;
+	disp *= (dist_wave_fade * altitude_wave_fade);
 
 	vec3 world_displaced = world_v + disp;
 	VERTEX = (inverse(MODEL_MATRIX) * vec4(world_displaced, 1.0)).xyz;
@@ -311,6 +343,8 @@ void fragment() {
 
 	// Distance-based detail attenuation (extended to 850m for continuous rich water texture)
 	float detail_fade = clamp(1.0 - v_cam_dist / 850.0, 0.0, 1.0);
+	float alt_detail_fade = 1.0 - smoothstep(40.0, 800.0, v_cam_alt);
+	detail_fade *= alt_detail_fade;
 	float detail_curve = detail_fade * detail_fade * (3.0 - 2.0 * detail_fade);
 
 	// High-frequency slope gradient
@@ -373,6 +407,8 @@ void fragment() {
 
 	// Procedural Cellular Sea Foam (100% free of polygon confetti!)
 	float total_foam = evaluate_organic_foam(v_world_pos.xz, time_val, whitecap_crest_mask, water_depth, is_underwater);
+	float foam_alt_fade = 1.0 - smoothstep(30.0, 600.0, v_cam_alt);
+	total_foam *= foam_alt_fade;
 
 	// Toksvig normal variance absorption:
 	// Sub-pixel ripple variance is absorbed into roughness to form a silky, shimmer-free sun glitter lane
@@ -422,15 +458,42 @@ void fragment() {
 	}
 
 	vec3 surface_color = mix(water_composite, sky_reflected, fresnel);
-	surface_color += sss_light;
+	surface_color += sss_light * (1.0 - smoothstep(30.0, 600.0, v_cam_alt));
 	surface_color += sun_specular_energy;
 	surface_color = mix(surface_color, foam_color, total_foam);
 
+	// Distant planetary ocean model (100% identical optical model to atmosphere_clouds.gdshader)
+	vec3 diffuse_water = deep_water_color * (sun_color * (sun_intensity * 0.06 * clamp(sun_direction.y, 0.1, 1.0)) + sky_ambient_color * 0.8) + vec3(0.006, 0.035, 0.085);
+	vec3 dist_reflected_sky = mix(sky_ambient_color * 0.85, vec3(0.18, 0.38, 0.65), 0.4);
+	float dist_fresnel = 0.02 + (1.0 - 0.02) * pow(1.0 - NdotV, 5.0);
+	vec3 distant_ocean_color = mix(diffuse_water, dist_reflected_sky, dist_fresnel) + (sun_specular_energy * 0.65);
+
+	// Seamless Blending between near-field PBR ocean and planetary distant ocean:
+	// 1. Radially: smoothly converges to distant ocean color before circular_alpha fade begins
+	float dist_blend = smoothstep(fade_inner_radius * 0.35, fade_outer_radius, v_cam_dist);
+	// 2. Vertically: smoothly converges to distant ocean color as camera ascends
+	float alt_blend = smoothstep(40.0, 1000.0, v_cam_alt);
+	float to_distant = clamp(max(dist_blend, alt_blend), 0.0, 1.0);
+	surface_color = mix(surface_color, distant_ocean_color, to_distant);
+
 	// Aerial Perspective / Horizon Blending:
-	// As distance approaches outer radius, water smoothly merges into atmospheric sky horizon color
-	float horizon_haze = smoothstep(fade_inner_radius * 0.75, fade_outer_radius, v_cam_dist);
+	// Only applies when looking towards the distant planetary horizon at grazing angles (V.y near 0).
+	// Strictly disabled when looking downwards at the ocean below, completely banishing the bright circular donut halo!
+	float grazing_factor = clamp(1.0 - V.y * 3.5, 0.0, 1.0);
+	float horizon_haze = smoothstep(fade_inner_radius * 0.70, fade_outer_radius, v_cam_dist) * grazing_factor;
 	surface_color = mix(surface_color, sky_horizon_color, horizon_haze * 0.65);
 
+	// Photographic Tone Mapping (ACES Film matching atmosphere_clouds.gdshader)
+	surface_color = apply_tonemapping(surface_color, exposure, tonemap_mode, white_point);
+
+	// High-Altitude Seamless Handoff:
+	// Above 1000m to 1800m altitude, the high-res mesh smoothly dissolves to yield to the infinite planetary sky shader ocean
+	float alt_mesh_alpha = 1.0 - smoothstep(1000.0, 1800.0, v_cam_alt);
+	float final_alpha = circular_alpha * alt_mesh_alpha;
+	if (final_alpha <= 0.001) {
+		discard;
+	}
+
 	ALBEDO = surface_color;
-	ALPHA = circular_alpha;
+	ALPHA = final_alpha;
 }

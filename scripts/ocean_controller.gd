@@ -331,6 +331,12 @@ func _sync_environment_from_atmosphere() -> void:
 		_ocean_mat.set_shader_parameter("sky_ambient_color", Vector3(sky_amb.r, sky_amb.g, sky_amb.b))
 		_ocean_mat.set_shader_parameter("sky_horizon_color", Vector3(sky_hor.r, sky_hor.g, sky_hor.b))
 		_ocean_mat.set_shader_parameter("custom_time", time_sec)
+		_ocean_mat.set_shader_parameter("tonemap_mode", atmosphere_controller.tonemap_mode)
+		_ocean_mat.set_shader_parameter("exposure", atmosphere_controller.exposure)
+		_ocean_mat.set_shader_parameter("white_point", atmosphere_controller.white_point)
+
+	if atmosphere_controller._sky_material:
+		atmosphere_controller._sky_material.set_shader_parameter("deep_water_color", Vector3(deep_water_color.r, deep_water_color.g, deep_water_color.b))
 
 	if _underwater_mat:
 		_underwater_mat.set_shader_parameter("sun_direction", sun_dir)
