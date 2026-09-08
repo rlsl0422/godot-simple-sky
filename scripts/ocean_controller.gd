@@ -7,6 +7,7 @@ extends Node3D
 ## PBR water surface optics, and depth-based underwater volumetric scattering.
 
 const AtmosphereController = preload("res://scripts/atmosphere_cloud_controller.gd")
+const OceanNoiseGen = preload("res://scripts/ocean_noise_generator.gd")
 
 enum OceanPreset {
 	CUSTOM,
@@ -232,10 +233,15 @@ func _init_ocean_mesh() -> void:
 		mat.shader = load("res://shaders/ocean_surface.gdshader")
 		ocean_mesh_instance.material_override = mat
 
+	ocean_mesh_instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+
 	_ocean_mat = ocean_mesh_instance.material_override as ShaderMaterial
 	if _ocean_mat:
 		_ocean_mat.set_shader_parameter("fade_inner_radius", fade_inner_radius)
 		_ocean_mat.set_shader_parameter("fade_outer_radius", fade_outer_radius)
+		var normal_tex = OceanNoiseGen.get_or_create_ocean_normal()
+		if normal_tex:
+			_ocean_mat.set_shader_parameter("wave_normal_tex", normal_tex)
 
 func _init_underwater_quad() -> void:
 	if not underwater_quad:
@@ -355,10 +361,10 @@ func _apply_ocean_preset(preset: OceanPreset) -> void:
 			wave_speed = 1.2
 			wave_steepness = 0.55
 			water_clarity = 22.0
-			surface_roughness = 0.06
-			crest_foam_threshold = 0.68
-			crest_foam_intensity = 1.6
-			sss_intensity = 2.2
+			surface_roughness = 0.08
+			crest_foam_threshold = 0.74
+			crest_foam_intensity = 1.1
+			sss_intensity = 1.2
 			underwater_turbidity = 0.025
 			caustics_strength = 0.8
 

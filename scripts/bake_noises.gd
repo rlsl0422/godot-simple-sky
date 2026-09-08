@@ -15,6 +15,10 @@ func _init() -> void:
 	# Generate Weather Map
 	CloudNoiseGen.generate_weather_map(true)
 	
+	# Generate Ocean Wave Normal
+	var OceanNoiseGen = preload("res://scripts/ocean_noise_generator.gd")
+	OceanNoiseGen.generate_ocean_normal(true)
+	
 	var elapsed = Time.get_ticks_msec() - t0
 	print("[BakeNoises] Finished all noise baking in %d ms!" % elapsed)
 	quit(0)

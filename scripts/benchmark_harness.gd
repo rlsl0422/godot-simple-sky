@@ -154,13 +154,13 @@ func _setup_phase_5_downward_ground_and_contour() -> void:
 	camera.look_at_from_position(camera.global_position, camera.global_position + look_dir, Vector3.UP)
 
 func _setup_phase_6_ocean_view() -> void:
-	print("[BenchmarkHarness] Phase 6: Infinite Ocean Wave & Golden Specular Reflection test...")
-	controller.weather_preset = CloudController.WeatherPreset.GOLDEN_HOUR
+	print("[BenchmarkHarness] Phase 6: Infinite Ocean Wave & Specular Reflection test (matching user view)...")
+	controller.weather_preset = CloudController.WeatherPreset.FAIR_CUMULUS
 	controller.performance_mode = CloudController.PerformanceMode.MEDIUM
-	controller.time_of_day = 17.5
-	camera.global_position = Vector3(0.0, 15.0, 0.0)
+	controller.time_of_day = 14.5
+	camera.global_position = Vector3(0.0, 45.0, 0.0)
 	var sun_dir = controller._current_sun_direction
-	var look_dir = Vector3(sun_dir.x, -0.15, sun_dir.z).normalized()
+	var look_dir = Vector3(sun_dir.x, -0.32, sun_dir.z).normalized()
 	camera.look_at_from_position(camera.global_position, camera.global_position + look_dir, Vector3.UP)
 
 func _setup_phase_7_underwater_view() -> void:
