@@ -109,12 +109,12 @@ func _process(delta: float) -> void:
 		_finalize_benchmark()
 
 func _setup_phase_1_noon_cumulus() -> void:
-	print("[BenchmarkHarness] Phase 1: Setting up Noon Cumulus...")
+	print("[BenchmarkHarness] Phase 1: Setting up Noon Cumulus (14.5h, MEDIUM mode)...")
 	controller.weather_preset = CloudController.WeatherPreset.FAIR_CUMULUS
 	controller.performance_mode = CloudController.PerformanceMode.MEDIUM
-	controller.time_of_day = 13.0
+	controller.time_of_day = 14.5
 	camera.global_position = Vector3(0.0, 50.0, 0.0)
-	var look_dir = Vector3(0.3, 0.35, -0.8).normalized()
+	var look_dir = Vector3(0.12, 0.10, -0.99).normalized()
 	camera.look_at_from_position(camera.global_position, camera.global_position + look_dir, Vector3.UP)
 
 func _setup_phase_2_sun_silver_lining() -> void:

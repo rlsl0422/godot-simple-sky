@@ -67,7 +67,7 @@ uniform vec3 cloud_ambient_color : source_color = vec3(0.65, 0.72, 0.85);
 group_uniforms Performance;
 uniform int max_steps : hint_range(16, 96, 2) = 36;
 uniform int max_light_steps : hint_range(2, 8, 1) = 4;
-uniform float empty_skip_multiplier : hint_range(1.0, 3.0, 0.1) = 2.0;
+uniform float empty_skip_multiplier : hint_range(1.0, 3.0, 0.05) = 1.15;
 uniform float max_distance_km : hint_range(10.0, 60.0, 1.0) = 36.0;
 uniform float detail_lod_distance_km : hint_range(4.0, 20.0, 1.0) = 12.0;
 
@@ -449,10 +449,11 @@ void sky() {
 		float march_length = t_end - t_start;
 		float base_step = march_length / float(max_steps);
 		
-		// Centered low-discrepancy ray jitter (Jimenez 2014)
-		// Damped jitter eliminates screen-door mesh and jagged edge serration while preventing slice alignment
-		float dither = (get_ign(FRAGCOORD.xy) - 0.5) * 0.40;
-		float current_t = t_start + base_step * (0.5 + dither);
+		// Low-discrepancy screen-space ray jitter using Interleaved Gradient Noise (Jimenez 2014)
+		// Spanning full [0, 1) range guarantees 100% continuous coverage with zero dead-zone slice gaps,
+		// completely eliminating concentric horizontal rib stripes and wood-grain contour banding.
+		float dither = get_ign(FRAGCOORD.xy);
+		float current_t = t_start + base_step * dither;
 		
 		vec3 accumulated_cloud_color = vec3(0.0);
 		float transmittance = 1.0;
