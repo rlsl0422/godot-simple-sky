@@ -165,10 +165,10 @@ void fragment() {
 	vec2 refracted_uv = clamp(SCREEN_UV + uv_offset, vec2(0.001), vec2(0.999));
 	vec3 scene_color = texture(screen_texture, refracted_uv).rgb;
 
-	// 3. Spectral Beer-Lambert Extinction
+	// 4. Spectral Beer-Lambert Extinction
 	vec3 extinction = exp(-absorption_coefficients * water_path);
 
-	// 4. Crystal Clear Tropical In-Scattering
+	// 5. Crystal Clear Tropical In-Scattering
 	float depth_below_surface = max(-cam_pos.y, 0.0);
 	float sun_down_attenuation = exp(-depth_below_surface * 0.05);
 	vec3 ambient_sun = sun_color * (sun_intensity * 0.05 * sun_down_attenuation);
@@ -177,7 +177,7 @@ void fragment() {
 	vec3 local_scatter_color = mix(water_scatter_color, deep_extinction_color, clamp(depth_below_surface * 0.02, 0.0, 1.0));
 	vec3 inscattered_light = local_scatter_color * (ambient_sun + vec3(0.04, 0.12, 0.22)) * inscatter_factor;
 
-	// 5. NATURAL, SUBTLE GODRAYS (Directional, Depth-Attenuated, Zero Anti-Solar Artifacts)
+	// 6. NATURAL, SUBTLE GODRAYS (Directional, Depth-Attenuated, Zero Anti-Solar Artifacts)
 	vec3 godray_accum = vec3(0.0);
 	vec3 sun_norm = normalize(sun_direction);
 	float sun_cos = dot(ray_dir, sun_norm);
@@ -239,7 +239,7 @@ void fragment() {
 		godray_accum = godray_raw / (1.0 + godray_raw * 0.8);
 	}
 
-	// 6. Gentle Caustics on Solid Geometry only
+	// 7. Gentle Caustics on Solid Geometry only
 	vec3 caustics_light = vec3(0.0);
 	if (!is_sky && world_pos.y <= 0.0) {
 		float depth_caustic_fade = exp(-abs(world_pos.y) * 0.10);
@@ -247,7 +247,7 @@ void fragment() {
 		caustics_light = sun_color * (caustic_val * caustics_strength * depth_caustic_fade * clamp(sun_direction.y, 0.0, 1.0));
 	}
 
-	// 7. Final Color Assembly
+	// 8. Final Color Assembly
 	vec3 attenuated_scene = (scene_color + caustics_light) * extinction;
 	vec3 final_color = attenuated_scene + inscattered_light + godray_accum;
 

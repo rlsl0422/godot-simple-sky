@@ -72,22 +72,22 @@ enum OceanPreset {
 # EXPORTS: WATER OPTICS & COLORS
 # ==========================================
 @export_group("Water Optics")
-@export var deep_water_color: Color = Color(0.012, 0.065, 0.14):
+@export var deep_water_color: Color = Color(0.012, 0.080, 0.22):
 	set(val):
 		deep_water_color = val
 		_update_ocean_uniform("deep_water_color", Vector3(val.r, val.g, val.b))
 
-@export var shallow_water_color: Color = Color(0.08, 0.32, 0.42):
+@export var shallow_water_color: Color = Color(0.04, 0.32, 0.48):
 	set(val):
 		shallow_water_color = val
 		_update_ocean_uniform("shallow_water_color", Vector3(val.r, val.g, val.b))
 
-@export var sss_color: Color = Color(0.15, 0.75, 0.62):
+@export var sss_color: Color = Color(0.03, 0.28, 0.32):
 	set(val):
 		sss_color = val
 		_update_ocean_uniform("sss_color", Vector3(val.r, val.g, val.b))
 
-@export_range(0.0, 5.0, 0.1) var sss_intensity: float = 2.2: ## Crest transmission glow intensity
+@export_range(0.0, 5.0, 0.1) var sss_intensity: float = 1.0: ## Crest transmission glow intensity
 	set(val):
 		sss_intensity = val
 		_update_ocean_uniform("sss_intensity", val)
@@ -191,9 +191,16 @@ func _process(_delta: float) -> void:
 	# 2. Identify active camera (editor viewport or scene camera)
 	var cam: Camera3D = null
 	if Engine.is_editor_hint():
-		var vp = get_viewport()
-		if vp:
-			cam = vp.get_camera_3d()
+		if Engine.has_singleton("EditorInterface"):
+			var ei = Engine.get_singleton("EditorInterface")
+			if ei and ei.has_method("get_editor_viewport_3d"):
+				var evp = ei.get_editor_viewport_3d(0)
+				if evp and evp.has_method("get_camera_3d"):
+					cam = evp.get_camera_3d()
+		if not cam:
+			var vp = get_viewport()
+			if vp:
+				cam = vp.get_camera_3d()
 	if not cam:
 		cam = camera if camera else (get_viewport().get_camera_3d() if get_viewport() else null)
 	if not cam:
@@ -280,8 +287,8 @@ func _sync_environment_from_atmosphere() -> void:
 
 	# Approximate sky ambient & horizon colors from solar elevation
 	var sun_height = clampf(sun_dir.y, 0.0, 1.0)
-	var sky_amb = Color(0.15, 0.35, 0.60).lerp(Color(0.85, 0.45, 0.20), clampf((0.2 - sun_dir.y) * 4.0, 0.0, 1.0))
-	var sky_hor = Color(0.65, 0.75, 0.85).lerp(Color(0.95, 0.55, 0.25), clampf((0.2 - sun_dir.y) * 4.0, 0.0, 1.0))
+	var sky_amb = Color(0.06, 0.22, 0.52).lerp(Color(0.85, 0.45, 0.20), clampf((0.2 - sun_dir.y) * 4.0, 0.0, 1.0))
+	var sky_hor = Color(0.26, 0.52, 0.76).lerp(Color(0.95, 0.55, 0.25), clampf((0.2 - sun_dir.y) * 4.0, 0.0, 1.0))
 
 	if _ocean_mat:
 		_ocean_mat.set_shader_parameter("sun_direction", sun_dir)
@@ -364,7 +371,7 @@ func _apply_ocean_preset(preset: OceanPreset) -> void:
 			surface_roughness = 0.08
 			crest_foam_threshold = 0.74
 			crest_foam_intensity = 1.1
-			sss_intensity = 1.2
+			sss_intensity = 0.9
 			underwater_turbidity = 0.025
 			caustics_strength = 0.8
 
@@ -377,7 +384,7 @@ func _apply_ocean_preset(preset: OceanPreset) -> void:
 			surface_roughness = 0.12
 			crest_foam_threshold = 0.52
 			crest_foam_intensity = 2.2
-			sss_intensity = 2.8
+			sss_intensity = 1.2
 			underwater_turbidity = 0.045
 			caustics_strength = 0.5
 
@@ -390,7 +397,7 @@ func _apply_ocean_preset(preset: OceanPreset) -> void:
 			surface_roughness = 0.18
 			crest_foam_threshold = 0.40
 			crest_foam_intensity = 2.8
-			sss_intensity = 1.2
+			sss_intensity = 1.0
 			underwater_turbidity = 0.075
 			caustics_strength = 0.2
 

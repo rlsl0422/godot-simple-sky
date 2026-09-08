@@ -1,5 +1,5 @@
 shader_type spatial;
-render_mode cull_disabled, depth_draw_opaque, unshaded, blend_mix;
+render_mode cull_back, depth_draw_opaque, unshaded, blend_mix;
 
 /*
  * State-of-the-Art Physically-Based Infinite Ocean Surface Shader
@@ -28,10 +28,10 @@ uniform vec2 primary_wind_dir = vec2(0.866, 0.5);
 // UNIFORMS: WATER OPTICS & COLORS
 // ==========================================
 group_uniforms Water_Optics;
-uniform vec3 deep_water_color : source_color = vec3(0.008, 0.042, 0.105);
-uniform vec3 shallow_water_color : source_color = vec3(0.040, 0.280, 0.380);
-uniform vec3 sss_color : source_color = vec3(0.08, 0.65, 0.52);
-uniform float sss_intensity : hint_range(0.0, 5.0, 0.1) = 2.4;
+uniform vec3 deep_water_color : source_color = vec3(0.012, 0.080, 0.220);
+uniform vec3 shallow_water_color : source_color = vec3(0.040, 0.320, 0.480);
+uniform vec3 sss_color : source_color = vec3(0.03, 0.28, 0.32);
+uniform float sss_intensity : hint_range(0.0, 5.0, 0.1) = 1.0;
 uniform float water_clarity : hint_range(1.0, 80.0, 1.0) = 22.0;
 uniform vec3 absorption_coefficients = vec3(0.32, 0.07, 0.02);
 uniform float surface_roughness : hint_range(0.01, 0.5, 0.01) = 0.06;
@@ -52,8 +52,8 @@ group_uniforms Sun_and_Atmosphere;
 uniform vec3 sun_direction = vec3(0.0, 0.5, -0.866);
 uniform vec3 sun_color : source_color = vec3(1.0, 0.95, 0.88);
 uniform float sun_intensity : hint_range(0.0, 50.0, 0.1) = 22.0;
-uniform vec3 sky_ambient_color : source_color = vec3(0.2, 0.4, 0.65);
-uniform vec3 sky_horizon_color : source_color = vec3(0.65, 0.75, 0.85);
+uniform vec3 sky_ambient_color : source_color = vec3(0.06, 0.22, 0.52);
+uniform vec3 sky_horizon_color : source_color = vec3(0.26, 0.52, 0.76);
 
 // ==========================================
 // UNIFORMS: HORIZON & DISTANCE FADE
@@ -274,6 +274,12 @@ void vertex() {
 void fragment() {
 	float time_val = custom_time > 0.0 ? custom_time : TIME;
 	vec3 cam_pos = (INV_VIEW_MATRIX * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
+
+	// Submerged culling: never render ocean surface mesh from underwater (cull backfaces)
+	if (cam_pos.y < 0.0) {
+		discard;
+	}
+
 	vec3 V = normalize(cam_pos - v_world_pos);
 	vec3 L = normalize(sun_direction);
 
@@ -316,10 +322,7 @@ void fragment() {
 	// Distance normal flattening towards outer radius to match flat planetary sphere
 	N = normalize(mix(vec3(0.0, 1.0, 0.0), N, circular_alpha));
 
-	bool is_underwater = !FRONT_FACING || cam_pos.y < 0.0;
-	if (is_underwater) {
-		N = -N;
-	}
+	bool is_underwater = false;
 
 	// Depth Buffer Interaction (Beer-Lambert & Shoreline Contact Foam)
 	float surface_linear_depth = -VERTEX.z;
@@ -343,7 +346,8 @@ void fragment() {
 	// Fresnel & Snell's Window
 	float n1_idx = is_underwater ? 1.333 : 1.0;
 	float n2_idx = is_underwater ? 1.0 : 1.333;
-	float f0 = pow((n1_idx - n2_idx) / (n1_idx + n2_idx), 2.0);
+	float f_ratio = (n1_idx - n2_idx) / (n1_idx + n2_idx);
+	float f0 = f_ratio * f_ratio;
 
 	float NdotV = clamp(dot(N, V), 0.0, 1.0);
 	float fresnel = f0 + (1.0 - f0) * pow(1.0 - NdotV, 5.0);
@@ -355,11 +359,11 @@ void fragment() {
 		}
 	}
 
-	// Subsurface Scattering (Luminous Emerald Glow through thin wave crests)
+	// Subsurface Scattering (Translucent Emerald-Aquamarine transmission through thin wave crests)
 	float crest_norm = clamp((v_wave_crest + wave_amplitude * 0.35) / max(wave_amplitude * 1.25, 0.1), 0.0, 1.0);
 	float sss_forward = pow(clamp(dot(V, -L), 0.0, 1.0), 3.0);
-	float crest_sss_mask = smoothstep(0.42, 0.88, crest_norm);
-	vec3 sss_light = sss_color * (sss_intensity * 1.2) * sss_forward * crest_sss_mask * clamp(sun_direction.y * 2.2, 0.0, 1.0);
+	float crest_sss_mask = smoothstep(0.45, 0.90, crest_norm);
+	vec3 sss_light = sss_color * (sss_intensity * 0.75) * sss_forward * crest_sss_mask * clamp(sun_direction.y * 1.8, 0.0, 1.0);
 
 	// Modern Jacobian Whitecap Foam (Breaks only on colliding crest summits)
 	float h_norm = clamp((v_wave_crest + wave_amplitude * 0.20) / max(wave_amplitude * 1.10, 0.1), 0.0, 1.0);
@@ -402,10 +406,14 @@ void fragment() {
 	// Sky Environment Reflection
 	vec3 R = reflect(-V, N);
 	float sky_elevation = clamp(R.y, 0.0, 1.0);
-	vec3 sky_reflected = mix(sky_horizon_color, sky_ambient_color, pow(sky_elevation, 0.55));
+	vec3 sky_reflected = mix(sky_horizon_color, sky_ambient_color, sqrt(sky_elevation));
+
+	// Physical Upwelling Radiance (Diffuse water volume backscattering from sun + sky dome)
+	vec3 diffuse_illumination = sun_color * (sun_intensity * 0.08 * clamp(sun_direction.y, 0.1, 1.0)) + sky_ambient_color * 1.5;
+	vec3 upwelling_ocean = deep_water_color * diffuse_illumination + vec3(0.008, 0.045, 0.11);
 
 	// Refracted scene color: only active when solid objects/terrain are submerged underneath
-	vec3 water_composite = deep_water_color;
+	vec3 water_composite = upwelling_ocean;
 	if (has_solid_ground) {
 		vec2 refract_offset = (VIEW_MATRIX * vec4(N.x, 0.0, N.z, 0.0)).xy * (0.028 / max(surface_linear_depth * 0.08 + 1.0, 1.0));
 		vec2 ref_uv = clamp(SCREEN_UV + refract_offset, vec2(0.001), vec2(0.999));
@@ -419,9 +427,9 @@ void fragment() {
 	surface_color = mix(surface_color, foam_color, total_foam);
 
 	// Aerial Perspective / Horizon Blending:
-	// As distance approaches outer radius, water smoothly merges into sky horizon color
-	float horizon_haze = smoothstep(fade_inner_radius * 0.65, fade_outer_radius, v_cam_dist);
-	surface_color = mix(surface_color, sky_horizon_color, horizon_haze * 0.75);
+	// As distance approaches outer radius, water smoothly merges into atmospheric sky horizon color
+	float horizon_haze = smoothstep(fade_inner_radius * 0.75, fade_outer_radius, v_cam_dist);
+	surface_color = mix(surface_color, sky_horizon_color, horizon_haze * 0.65);
 
 	ALBEDO = surface_color;
 	ALPHA = circular_alpha;

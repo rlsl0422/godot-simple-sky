@@ -7,11 +7,14 @@
 [ext_resource type="ImageTexture3D" path="res://assets/noises/cloud_detail_3d.res" id="3_fkctd"]
 [ext_resource type="Script" uid="uid://dku7v5ouidj7f" path="res://scripts/benchmark_harness.gd" id="4_benchmark"]
 [ext_resource type="Texture2D" path="res://assets/noises/weather_map_2d.res" id="4_ipc0k"]
-[ext_resource type="Script" path="res://scripts/ocean_controller.gd" id="5_ocean"]
+[ext_resource type="Script" uid="uid://2qjs43lvsfak" path="res://scripts/ocean_controller.gd" id="5_ocean"]
+[ext_resource type="Shader" uid="uid://ulxcx4i3ob1m" path="res://shaders/ocean_surface.gdshader" id="9_v85ea"]
+[ext_resource type="Texture2D" path="res://assets/noises/ocean_wave_normal.res" id="10_n1aei"]
+[ext_resource type="Shader" uid="uid://bj7fkdm4efmsx" path="res://shaders/underwater_post.gdshader" id="11_37ejw"]
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_sky"]
 shader = ExtResource("1_shader")
-shader_parameter/sun_direction = Vector3(0.37055743, 0.7319119, -0.57183224)
+shader_parameter/sun_direction = Vector3(0.6087614, 0.62517095, -0.4884371)
 shader_parameter/sun_color = Color(1, 0.95, 0.88, 1)
 shader_parameter/sun_intensity = 10.0
 shader_parameter/sun_disk_size = 0.015
@@ -24,22 +27,22 @@ shader_parameter/clouds_enabled = true
 shader_parameter/base_noise_tex = ExtResource("2_owdof")
 shader_parameter/detail_noise_tex = ExtResource("3_fkctd")
 shader_parameter/weather_tex = ExtResource("4_ipc0k")
-shader_parameter/cloud_coverage = 0.4
-shader_parameter/cloud_density_multiplier = 0.55
+shader_parameter/cloud_coverage = 0.42
+shader_parameter/cloud_density_multiplier = 1.3
 shader_parameter/cloud_bottom_altitude = 1600.0
-shader_parameter/cloud_top_altitude = 4650.0
+shader_parameter/cloud_top_altitude = 4200.0
 shader_parameter/cloud_scale = 0.22
 shader_parameter/detail_scale = 3.5
-shader_parameter/detail_strength = 0.08
+shader_parameter/detail_strength = 0.42
 shader_parameter/weather_scale = 0.045
 shader_parameter/wind_direction = Vector3(0.8660254, 0, 0.5)
 shader_parameter/wind_speed = 6.944444444444445
-shader_parameter/custom_time = 1040.848
+shader_parameter/custom_time = 352.22700000000003
 shader_parameter/camera_world_position = Vector3(0, 50, 0)
 shader_parameter/forward_scattering_g = 0.78
 shader_parameter/backward_scattering_g = 0.32
 shader_parameter/silver_lining_spread = 0.95
-shader_parameter/silver_lining_intensity = 3.9
+shader_parameter/silver_lining_intensity = 2.4
 shader_parameter/powder_effect_strength = 1.0
 shader_parameter/ambient_intensity = 0.85
 shader_parameter/cloud_base_color = Color(0.92, 0.94, 0.98, 1)
@@ -65,13 +68,74 @@ glow_intensity = 0.2
 glow_bloom = 0.02
 glow_hdr_threshold = 1.5
 
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_5ptkg"]
+render_priority = 0
+shader = ExtResource("9_v85ea")
+shader_parameter/wave_amplitude = 2.75
+shader_parameter/wave_length = 63.0
+shader_parameter/wave_speed = 1.3
+shader_parameter/wave_steepness = 0.62
+shader_parameter/primary_wind_dir = Vector2(0.9063078, 0.42261827)
+shader_parameter/deep_water_color = Color(0.012, 0.08, 0.22, 1)
+shader_parameter/shallow_water_color = Color(0.04, 0.32, 0.48, 1)
+shader_parameter/sss_color = Color(0.03, 0.28, 0.32, 1)
+shader_parameter/sss_intensity = 1.0
+shader_parameter/water_clarity = 15.0
+shader_parameter/absorption_coefficients = Vector3(0.32, 0.07, 0.02)
+shader_parameter/surface_roughness = 0.12
+shader_parameter/foam_color = Color(0.92, 0.95, 0.98, 1)
+shader_parameter/crest_foam_threshold = 0.52
+shader_parameter/crest_foam_intensity = 2.2
+shader_parameter/contact_foam_distance = 1.4
+shader_parameter/sun_direction = Vector3(0.6087614, 0.62517095, -0.4884371)
+shader_parameter/sun_color = Color(1, 0.95, 0.88, 1)
+shader_parameter/sun_intensity = 10.0
+shader_parameter/sky_ambient_color = Color(0.06, 0.22, 0.52, 1)
+shader_parameter/sky_horizon_color = Color(0.26, 0.52, 0.76, 1)
+shader_parameter/fade_inner_radius = 1400.0
+shader_parameter/fade_outer_radius = 2400.0
+shader_parameter/custom_time = 352.22700000000003
+shader_parameter/wave_normal_tex = ExtResource("10_n1aei")
+
+[sub_resource type="PlaneMesh" id="PlaneMesh_k8c2n"]
+size = Vector2(6000, 6000)
+subdivide_width = 256
+subdivide_depth = 256
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_vmc2o"]
+render_priority = 0
+shader = ExtResource("11_37ejw")
+shader_parameter/water_scatter_color = Color(0.015, 0.45, 0.68, 1)
+shader_parameter/deep_extinction_color = Color(0.002, 0.035, 0.14, 1)
+shader_parameter/absorption_coefficients = Vector3(0.42, 0.065, 0.015)
+shader_parameter/turbidity = 0.045
+shader_parameter/max_visibility_meters = 110.0
+shader_parameter/godray_intensity = 1.1
+shader_parameter/godray_sharpness = 3.5
+shader_parameter/godray_phase_g = 0.8
+shader_parameter/caustics_strength = 0.5
+shader_parameter/caustics_scale = 1.4
+shader_parameter/refraction_strength = 0.038
+shader_parameter/wave_amplitude = 2.75
+shader_parameter/wave_length = 63.0
+shader_parameter/wave_speed = 1.3
+shader_parameter/wave_steepness = 0.62
+shader_parameter/primary_wind_dir = Vector2(0.9063078, 0.42261827)
+shader_parameter/sun_direction = Vector3(0.6087614, 0.62517095, -0.4884371)
+shader_parameter/sun_color = Color(1, 0.98, 0.92, 1)
+shader_parameter/sun_intensity = 10.0
+shader_parameter/custom_time = 352.22700000000003
+
+[sub_resource type="QuadMesh" id="QuadMesh_n02pc"]
+size = Vector2(2, 2)
+
 [node name="MainShowcase" type="Node3D" unique_id=1789039723]
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=313085696]
 environment = SubResource("Environment_main")
 
 [node name="DirectionalLight3D" type="DirectionalLight3D" parent="." unique_id=1628056038]
-transform = Transform3D(-0.83920294, -0.39802724, 0.3705575, 0, 0.6813994, 0.73191214, -0.54381835, 0.61422276, -0.57183236, 0, 0, 0)
+transform = Transform3D(-0.62580997, -0.48761824, 0.6087616, 0, 0.780488, 0.6251712, -0.7799756, 0.39123833, -0.48843718, 0, 0, 0)
 light_color = Color(1, 0.96, 0.9, 1)
 shadow_enabled = true
 
@@ -87,14 +151,12 @@ ocean_controller = NodePath("../OceanController")
 script = ExtResource("3_controller")
 world_environment = NodePath("../WorldEnvironment")
 sun_light = NodePath("../DirectionalLight3D")
-time_of_day = 13.45
 sun_latitude = 38.0
 sun_intensity = 10.0
-cloud_coverage = 0.4
-cloud_density = 0.55
-cloud_thickness = 3050.0
-detail_fluffiness = 0.08
-silver_lining = 3.9
+cloud_coverage = 0.42
+cloud_density = 1.3
+cloud_thickness = 2600.0
+detail_fluffiness = 0.42
 sun_corona_intensity = 0.05
 
 [node name="CanvasLayer" type="CanvasLayer" parent="." unique_id=595155925]
@@ -117,8 +179,34 @@ camera = NodePath("../Camera3D")
 auto_benchmark = false
 overlay_label = NodePath("../CanvasLayer/StatsLabel")
 
-[node name="OceanController" type="Node3D" parent="." node_paths=PackedStringArray("atmosphere_controller", "camera")]
+[node name="OceanController" type="Node3D" parent="." unique_id=1640885484 node_paths=PackedStringArray("atmosphere_controller", "camera", "ocean_mesh_instance", "underwater_quad")]
 script = ExtResource("5_ocean")
 atmosphere_controller = NodePath("../AtmosphereCloudController")
 camera = NodePath("../Camera3D")
+ocean_mesh_instance = NodePath("OceanSurfaceMesh")
+underwater_quad = NodePath("UnderwaterPostQuad")
+ocean_preset = 3
+wave_amplitude = 2.75
+wave_length = 63.0
+wave_speed = 1.3
+wave_steepness = 0.62
+sss_intensity = 1.0
+water_clarity = 15.0
+surface_roughness = 0.12
+crest_foam_threshold = 0.52
+crest_foam_intensity = 2.2
+underwater_turbidity = 0.045
+caustics_strength = 0.5
 
+[node name="OceanSurfaceMesh" type="MeshInstance3D" parent="OceanController" unique_id=625027918]
+material_override = SubResource("ShaderMaterial_5ptkg")
+cast_shadow = 0
+mesh = SubResource("PlaneMesh_k8c2n")
+
+[node name="UnderwaterPostQuad" type="MeshInstance3D" parent="OceanController" unique_id=588069186]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 50, 0)
+material_override = SubResource("ShaderMaterial_vmc2o")
+cast_shadow = 0
+extra_cull_margin = 16384.0
+custom_aabb = AABB(-100000, -100000, -100000, 200000, 200000, 200000)
+mesh = SubResource("QuadMesh_n02pc")
