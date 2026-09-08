@@ -262,7 +262,10 @@ void fragment() {
 	float sky_elevation = clamp(R.y, 0.0, 1.0);
 	vec3 sky_reflected = mix(sky_horizon_color, sky_ambient_color, pow(sky_elevation, 0.5));
 
-	vec3 refracted_scene = texture(screen_texture, SCREEN_UV).rgb;
+	// Refracted scene color through undulating surface normal
+	vec2 refract_offset = (VIEW_MATRIX * vec4(N.x, 0.0, N.z, 0.0)).xy * (0.028 / max(surface_linear_depth * 0.08 + 1.0, 1.0));
+	vec2 ref_uv = clamp(SCREEN_UV + refract_offset, vec2(0.001), vec2(0.999));
+	vec3 refracted_scene = texture(screen_texture, ref_uv).rgb;
 	vec3 water_composite = mix(refracted_scene * depth_transmittance, water_body_color, 1.0 - depth_transmittance.y * 0.7);
 
 	vec3 surface_color = mix(water_composite, sky_reflected, fresnel);

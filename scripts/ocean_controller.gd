@@ -42,21 +42,25 @@ enum OceanPreset {
 	set(val):
 		wave_amplitude = val
 		_update_ocean_uniform("wave_amplitude", val)
+		_update_underwater_uniform("wave_amplitude", val)
 
 @export_range(5.0, 150.0, 1.0) var wave_length: float = 38.0: ## Base wavelength (meters)
 	set(val):
 		wave_length = val
 		_update_ocean_uniform("wave_length", val)
+		_update_underwater_uniform("wave_length", val)
 
 @export_range(0.1, 4.0, 0.05) var wave_speed: float = 1.2: ## Wave propagation velocity
 	set(val):
 		wave_speed = val
 		_update_ocean_uniform("wave_speed", val)
+		_update_underwater_uniform("wave_speed", val)
 
 @export_range(0.0, 1.0, 0.02) var wave_steepness: float = 0.55: ## Gerstner sharpness (choppiness)
 	set(val):
 		wave_steepness = val
 		_update_ocean_uniform("wave_steepness", val)
+		_update_underwater_uniform("wave_steepness", val)
 
 @export_range(0.0, 360.0, 1.0) var wave_wind_heading: float = 65.0: ## Wind propagation angle in degrees
 	set(val):
@@ -139,6 +143,11 @@ enum OceanPreset {
 	set(val):
 		underwater_max_visibility = val
 		_update_underwater_uniform("max_visibility_meters", val)
+
+@export_range(0.0, 0.12, 0.002) var underwater_refraction_strength: float = 0.038: ## Strength of wave wobble when looking outside from underwater
+	set(val):
+		underwater_refraction_strength = val
+		_update_underwater_uniform("refraction_strength", val)
 
 @export_group("Godrays")
 @export_range(0.0, 5.0, 0.1) var godray_intensity: float = 1.1:
@@ -286,6 +295,7 @@ func _update_wind_direction() -> void:
 	var rad = deg_to_rad(wave_wind_heading)
 	var dir = Vector2(sin(rad), cos(rad)).normalized()
 	_update_ocean_uniform("primary_wind_dir", dir)
+	_update_underwater_uniform("primary_wind_dir", dir)
 
 func _sync_all_uniforms() -> void:
 	_update_wind_direction()
@@ -311,6 +321,11 @@ func _sync_all_uniforms() -> void:
 	_update_underwater_uniform("max_visibility_meters", underwater_max_visibility)
 	_update_underwater_uniform("godray_intensity", godray_intensity)
 	_update_underwater_uniform("godray_sharpness", godray_sharpness)
+	_update_underwater_uniform("refraction_strength", underwater_refraction_strength)
+	_update_underwater_uniform("wave_amplitude", wave_amplitude)
+	_update_underwater_uniform("wave_length", wave_length)
+	_update_underwater_uniform("wave_speed", wave_speed)
+	_update_underwater_uniform("wave_steepness", wave_steepness)
 
 func _update_ocean_uniform(param: String, value: Variant) -> void:
 	if _ocean_mat:

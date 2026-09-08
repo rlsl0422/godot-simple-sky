@@ -23,6 +23,14 @@ uniform float godray_phase_g : hint_range(0.4, 0.95, 0.01) = 0.80;
 uniform float caustics_strength : hint_range(0.0, 3.0, 0.1) = 0.6;
 uniform float caustics_scale : hint_range(0.1, 4.0, 0.05) = 1.4;
 
+group_uniforms Wave_Refraction;
+uniform float refraction_strength : hint_range(0.0, 0.12, 0.002) = 0.038;       // Wobble intensity when looking outside
+uniform float wave_amplitude = 1.1;
+uniform float wave_length = 38.0;
+uniform float wave_speed = 1.2;
+uniform float wave_steepness = 0.55;
+uniform vec2 primary_wind_dir = vec2(0.866, 0.5);
+
 group_uniforms Sun_Sync;
 uniform vec3 sun_direction = vec3(0.0, 0.5, -0.866);
 uniform vec3 sun_color : source_color = vec3(1.0, 0.98, 0.92);
@@ -48,6 +56,53 @@ float evaluate_caustics(vec2 xz, float time_val) {
 	return pow(abs(c1 * 0.6 + c2 * 0.4), 2.0);
 }
 
+// Multi-Harmonic Ocean Wave Slope Evaluator (Gerstner-derived surface wave gradient)
+vec2 evaluate_wave_slope(vec2 surf_pos, float time_val) {
+	vec2 w_dir1 = normalize(primary_wind_dir);
+	vec2 w_dir2 = vec2(-w_dir1.y, w_dir1.x) * 0.5 + w_dir1 * 0.866;
+	vec2 w_dir3 = vec2(w_dir1.y, -w_dir1.x) * 0.45 + w_dir1 * 0.893;
+	vec2 w_dir4 = vec2(-w_dir1.x, w_dir1.y) * 0.35 + w_dir1 * 0.936;
+
+	float base_k = 6.2831853 / max(wave_length, 8.0);
+	float base_w = sqrt(9.81 * base_k) * wave_speed;
+
+	vec2 slope = vec2(0.0);
+
+	// Swell 1 (Primary broad rolling swell)
+	float phase1 = dot(w_dir1, surf_pos) * base_k - time_val * base_w;
+	slope += w_dir1 * (sin(phase1) * 0.70);
+
+	// Swell 2 (Secondary Cross-Swell: 1.618 golden ratio)
+	float k2 = base_k * 1.618;
+	float w2 = base_w * 1.272;
+	float phase2 = dot(w_dir2, surf_pos) * k2 - time_val * w2;
+	slope += w_dir2 * (sin(phase2) * 0.45);
+
+	// Wave 3 (Wind Chop)
+	float k3 = base_k * 2.618;
+	float w3 = base_w * 1.618;
+	float phase3 = dot(w_dir3, surf_pos) * k3 - time_val * w3;
+	slope += w_dir3 * (sin(phase3) * 0.28);
+
+	// Wave 4 (Capillary Wavelet)
+	float k4 = base_k * 4.236;
+	float w4 = base_w * 2.058;
+	float phase4 = dot(w_dir4, surf_pos) * k4 - time_val * w4;
+	slope += w_dir4 * (sin(phase4) * 0.16);
+
+	// Organic micro-ripples for fine liquid shimmering across clouds/sun
+	mat2 rot = mat2(vec2(0.866, -0.5), vec2(0.5, 0.866));
+	vec2 rip_uv1 = surf_pos * 0.35 + w_dir1 * (time_val * 0.8);
+	vec2 rip_uv2 = (rot * surf_pos) * 0.65 - vec2(-w_dir1.y, w_dir1.x) * (time_val * 1.1);
+	vec2 rip_grad = vec2(
+		cos(rip_uv1.x * 2.2 + sin(rip_uv1.y * 1.5)),
+		-sin(rip_uv2.x * 2.8 - cos(rip_uv2.y * 1.7))
+	) * 0.18;
+
+	slope += rip_grad;
+	return slope;
+}
+
 // Henyey-Greenstein forward phase function
 float phase_hg(float cos_theta, float g) {
 	float g2 = g * g;
@@ -68,9 +123,8 @@ void fragment() {
 	vec3 view_ray = view_ray_h.xyz / max(abs(view_ray_h.w), 0.00001);
 	vec3 ray_dir = normalize((INV_VIEW_MATRIX * vec4(view_ray, 0.0)).xyz);
 
-	// 2. Depth buffer reading & solid geometry hit distance
+	// 2. Depth buffer reading & solid geometry hit distance (un-distorted UV for rock-solid stability)
 	float raw_depth = texture(depth_texture, SCREEN_UV).r;
-	vec3 scene_color = texture(screen_texture, SCREEN_UV).rgb;
 
 	// In Godot 4 Forward+ (Vulkan reversed-Z), clear sky depth is 0.0 (or 1.0 in some backends)
 	bool is_sky = raw_depth <= 0.0001 || raw_depth >= 0.9999;
@@ -87,6 +141,29 @@ void fragment() {
 	// Distance to water surface (y = 0) along view ray
 	float dist_to_surface = ray_dir.y > 0.001 ? (-cam_pos.y / ray_dir.y) : max_visibility_meters;
 	float water_path = min(solid_dist, dist_to_surface);
+
+	// 3. Dynamic Wave Refraction Wobble (looking outside through undulating water surface)
+	vec2 uv_offset = vec2(0.0);
+	bool crosses_surface = ray_dir.y > 0.001 && (is_sky || world_pos.y > 0.0);
+	if (crosses_surface && refraction_strength > 0.0001) {
+		vec3 surf_p = cam_pos + ray_dir * dist_to_surface;
+		vec2 wave_slope = evaluate_wave_slope(surf_p.xz, time_val);
+
+		// Project 3D horizontal wave slope into 2D camera viewport coordinates
+		vec3 cam_right = (INV_VIEW_MATRIX * vec4(1.0, 0.0, 0.0, 0.0)).xyz;
+		vec3 cam_up    = (INV_VIEW_MATRIX * vec4(0.0, 1.0, 0.0, 0.0)).xyz;
+		vec3 wave_norm_offset = vec3(-wave_slope.x, 0.0, -wave_slope.y);
+
+		float du = dot(wave_norm_offset, cam_right);
+		float dv = dot(wave_norm_offset, cam_up);
+
+		// Perspective scale: waves are larger on screen when close to surface
+		float perspective_scale = clamp(18.0 / max(dist_to_surface, 1.5), 0.25, 2.5);
+		uv_offset = vec2(du, dv) * (refraction_strength * perspective_scale);
+	}
+
+	vec2 refracted_uv = clamp(SCREEN_UV + uv_offset, vec2(0.001), vec2(0.999));
+	vec3 scene_color = texture(screen_texture, refracted_uv).rgb;
 
 	// 3. Spectral Beer-Lambert Extinction
 	vec3 extinction = exp(-absorption_coefficients * water_path);
@@ -121,7 +198,7 @@ void fragment() {
 		vec3 up_ref = abs(sun_norm.y) < 0.99 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0);
 		vec3 sun_right = normalize(cross(sun_norm, up_ref));
 		vec3 sun_up = cross(sun_right, sun_norm);
-		vec2 radial_coords = vec2(dot(ray_dir, sun_right), dot(ray_dir, sun_up));
+		vec2 radial_coords = vec2(dot(ray_dir, sun_right), dot(ray_dir, sun_up)) + uv_offset * 1.2;
 		float radial_dist = length(radial_coords);
 		float radial_angle = atan(radial_coords.y, radial_coords.x);
 
