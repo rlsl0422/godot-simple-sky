@@ -21,15 +21,20 @@ enum OceanPreset {
 # EXPORTS: NODES & LINKS
 # ==========================================
 @export_group("Linked Nodes")
+## 대기 및 태양 조명 파라미터를 동기화할 AtmosphereCloudController 노드
 @export var atmosphere_controller: AtmosphereController
+## 바다 표면 그리드 스냅 및 수중 렌더링 기준 카메라 (미지정 시 뷰포트 활성 카메라 자동 추적)
 @export var camera: Camera3D
+## 바다 표면 지오메트리를 렌더링하는 MeshInstance3D 노드
 @export var ocean_mesh_instance: MeshInstance3D
+## 수중 진입 시 화면 후처리(광학 산란, 굴절, 갓레이)를 담당하는 풀스크린 쿼드 MeshInstance3D
 @export var underwater_quad: MeshInstance3D
 
 # ==========================================
 # EXPORTS: PRESETS
 # ==========================================
 @export_group("Preset")
+## 바다 상태 프리셋 (CALM_LAKE: 잔잔한 호수, GENTLE_OCEAN: 평온한 대양, ROUGH_SEAS: 거친 파도, STORMY_TEMPEST: 폭풍우 대양)
 @export var ocean_preset: OceanPreset = OceanPreset.GENTLE_OCEAN:
 	set(val):
 		ocean_preset = val
@@ -39,31 +44,36 @@ enum OceanPreset {
 # EXPORTS: WAVE DYNAMICS
 # ==========================================
 @export_group("Wave Dynamics")
-@export_range(0.0, 8.0, 0.05) var wave_amplitude: float = 1.1: ## Wave peak height (meters)
+## 파도의 최대 수직 진폭(파고, 단위: 미터). 파도 능선의 최고점 높이를 결정합니다.
+@export_range(0.0, 8.0, 0.05) var wave_amplitude: float = 1.1:
 	set(val):
 		wave_amplitude = val
 		_update_ocean_uniform("wave_amplitude", val)
 		_update_underwater_uniform("wave_amplitude", val)
 
-@export_range(5.0, 150.0, 1.0) var wave_length: float = 38.0: ## Base wavelength (meters)
+## 기본 파장의 길이(단위: 미터). 값이 클수록 웅장하고 완만한 대양 너울이 형성되며, 작을수록 촘촘한 연안 파도가 생성됩니다.
+@export_range(5.0, 150.0, 1.0) var wave_length: float = 38.0:
 	set(val):
 		wave_length = val
 		_update_ocean_uniform("wave_length", val)
 		_update_underwater_uniform("wave_length", val)
 
-@export_range(0.1, 4.0, 0.05) var wave_speed: float = 1.2: ## Wave propagation velocity
+## 파도의 전파 속도 배율. 물리적 분산 관계에 기반한 파도의 이동 및 굴림 속도를 조절합니다.
+@export_range(0.1, 4.0, 0.05) var wave_speed: float = 1.2:
 	set(val):
 		wave_speed = val
 		_update_ocean_uniform("wave_speed", val)
 		_update_underwater_uniform("wave_speed", val)
 
-@export_range(0.0, 1.0, 0.02) var wave_steepness: float = 0.55: ## Gerstner sharpness (choppiness)
+## 게르스트너(Gerstner) 파도 뾰족도(가파름). 0.0은 부드러운 사인파이며, 1.0에 가까울수록 날카롭게 솟아오르는 삼각 파도마루를 형성합니다.
+@export_range(0.0, 1.0, 0.02) var wave_steepness: float = 0.55:
 	set(val):
 		wave_steepness = val
 		_update_ocean_uniform("wave_steepness", val)
 		_update_underwater_uniform("wave_steepness", val)
 
-@export_range(0.0, 360.0, 1.0) var wave_wind_heading: float = 65.0: ## Wind propagation angle in degrees
+## 파도가 진행하는 바람의 방위각(0°~360°). 바다 파도가 이동하는 기본 방향을 설정합니다.
+@export_range(0.0, 360.0, 1.0) var wave_wind_heading: float = 65.0:
 	set(val):
 		wave_wind_heading = val
 		_update_wind_direction()
@@ -72,31 +82,37 @@ enum OceanPreset {
 # EXPORTS: WATER OPTICS & COLORS
 # ==========================================
 @export_group("Water Optics")
+## 깊은 수심의 본체 색상. 태양광/하늘빛이 물속으로 투과되어 상향 산란(Upwelling)되는 대양 고유의 감청색/코발트 블루를 결정합니다.
 @export var deep_water_color: Color = Color(0.012, 0.080, 0.22):
 	set(val):
 		deep_water_color = val
 		_update_ocean_uniform("deep_water_color", Vector3(val.r, val.g, val.b))
 
+## 얕은 수심의 물 색상. 해안선이나 얕은 수중 물체 주변에서 투과율이 높을 때 나타나는 밝은 청록빛을 결정합니다.
 @export var shallow_water_color: Color = Color(0.04, 0.32, 0.48):
 	set(val):
 		shallow_water_color = val
 		_update_ocean_uniform("shallow_water_color", Vector3(val.r, val.g, val.b))
 
+## 파도마루의 표면하 산란(SSS) 투과 색상. 태양 역광 시 얇은 파도 능선을 투과하는 자연스러운 에메랄드/아쿠아마린 색조를 설정합니다.
 @export var sss_color: Color = Color(0.03, 0.28, 0.32):
 	set(val):
 		sss_color = val
 		_update_ocean_uniform("sss_color", Vector3(val.r, val.g, val.b))
 
-@export_range(0.0, 5.0, 0.1) var sss_intensity: float = 1.0: ## Crest transmission glow intensity
+## 파도 능선의 표면하 산란(SSS) 투과광 강도. 역광 시 파도 정상이 은은하게 투명하게 빛나는 효과의 세기를 조절합니다.
+@export_range(0.0, 5.0, 0.1) var sss_intensity: float = 1.0:
 	set(val):
 		sss_intensity = val
 		_update_ocean_uniform("sss_intensity", val)
 
-@export_range(2.0, 60.0, 1.0) var water_clarity: float = 22.0: ## Visual penetration depth (meters)
+## 물의 가시적 투명도(단위: 미터). 물속의 물체나 해저면이 시각적으로 보일 수 있는 최대 침투 깊이입니다.
+@export_range(2.0, 60.0, 1.0) var water_clarity: float = 22.0:
 	set(val):
 		water_clarity = val
 		_update_ocean_uniform("water_clarity", val)
 
+## 해수면 마이크로 거칠기. 톡스빅(Toksvig) 분산 필터링과 결합되어 잔물결 위의 부드럽고 앨리어싱 없는 태양 반사로(Glitter Lane)를 형성합니다.
 @export_range(0.01, 0.4, 0.01) var surface_roughness: float = 0.06:
 	set(val):
 		surface_roughness = val
@@ -106,16 +122,19 @@ enum OceanPreset {
 # EXPORTS: FOAM & SHORELINE
 # ==========================================
 @export_group("Foam Dynamics")
+## 백파(Whitecap) 발생 자코비안 임계값. 값이 낮을수록 완만한 파도에서도 거품이 발생하며, 높을수록 충돌하는 거친 정점에서만 거품이 형성됩니다.
 @export_range(0.3, 1.0, 0.02) var crest_foam_threshold: float = 0.68:
 	set(val):
 		crest_foam_threshold = val
 		_update_ocean_uniform("crest_foam_threshold", val)
 
+## 절차적 세포형 기포 거품(Bubble Lace)의 밝기 및 가시성 강도.
 @export_range(0.0, 3.0, 0.1) var crest_foam_intensity: float = 1.6:
 	set(val):
 		crest_foam_intensity = val
 		_update_ocean_uniform("crest_foam_intensity", val)
 
+## 해안선 및 수중 고체 오브젝트와의 접촉 거품 감지 거리(단위: 미터).
 @export_range(0.1, 5.0, 0.1) var contact_foam_distance: float = 1.4:
 	set(val):
 		contact_foam_distance = val
@@ -125,48 +144,63 @@ enum OceanPreset {
 # EXPORTS: UNDERWATER OPTICS (Y < 0)
 # ==========================================
 @export_group("Underwater Optics")
-@export var underwater_scatter_color: Color = Color(0.0, 0.42, 0.62):
+## 수중 체적 인스캐터링(산란) 기본 색상. 수면 근처에서 햇빛이 산란되어 보이는 맑은 열대 에메랄드/청록 색상입니다.
+@export var underwater_scatter_color: Color = Color(0.015, 0.45, 0.68):
 	set(val):
 		underwater_scatter_color = val
 		_update_underwater_uniform("water_scatter_color", Vector3(val.r, val.g, val.b))
 
-@export_range(0.002, 0.05, 0.001) var underwater_turbidity: float = 0.010: ## In-scattering density (lower = clearer)
+## 수중 탁도(Turbidity). 물속의 부유 입자 밀도를 결정합니다. (낮을수록 투명한 크리스탈 바다, 높을수록 흐린 수중)
+@export_range(0.002, 0.05, 0.001) var underwater_turbidity: float = 0.010:
 	set(val):
 		underwater_turbidity = val
 		_update_underwater_uniform("turbidity", val)
 
+## 수중 지형 및 고체 오브젝트 표면에 투사되는 움직이는 태양 커스틱스(물결 무늬) 강도.
 @export_range(0.0, 3.0, 0.1) var caustics_strength: float = 0.75:
 	set(val):
 		caustics_strength = val
 		_update_underwater_uniform("caustics_strength", val)
 
+## 수중 최대 가시거리(단위: 미터). 빛이 완전히 소멸되어 심해 암흑 또는 배경색으로 수렴하는 거리입니다.
 @export_range(10.0, 150.0, 5.0) var underwater_max_visibility: float = 110.0:
 	set(val):
 		underwater_max_visibility = val
 		_update_underwater_uniform("max_visibility_meters", val)
 
-@export_range(0.0, 0.12, 0.002) var underwater_refraction_strength: float = 0.038: ## Strength of wave wobble when looking outside from underwater
+## 물속에서 외부(하늘, 구름, 태양)를 바라볼 때 파도에 의해 생기는 굴절 왜곡 및 울렁임(Wave Refraction Wobble)의 강도.
+@export_range(0.0, 0.12, 0.002) var underwater_refraction_strength: float = 0.038:
 	set(val):
 		underwater_refraction_strength = val
 		_update_underwater_uniform("refraction_strength", val)
 
+# ==========================================
+# EXPORTS: GODRAYS
+# ==========================================
 @export_group("Godrays")
+## 수면을 투과하여 물속으로 쏟아지는 태양 광선 줄기(갓레이)의 밝기 강도.
 @export_range(0.0, 5.0, 0.1) var godray_intensity: float = 1.1:
 	set(val):
 		godray_intensity = val
 		_update_underwater_uniform("godray_intensity", val)
 
-@export_range(1.0, 10.0, 0.5) var godray_sharpness: float = 3.5: ## Sharpness / thinness of light shafts
+## 갓레이 광선 줄기의 날카로움(빔 두께). 높을수록 얇고 뚜렷한 빛줄기가 되며, 낮을수록 부드럽게 퍼지는 광선이 됩니다.
+@export_range(1.0, 10.0, 0.5) var godray_sharpness: float = 3.5:
 	set(val):
 		godray_sharpness = val
 		_update_underwater_uniform("godray_sharpness", val)
 
+# ==========================================
+# EXPORTS: HORIZON & DISTANCE FADE
+# ==========================================
 @export_group("Horizon & Distance Fade")
+## 카메라로부터 파도 너울이 감쇠되기 시작하는 내부 반경(단위: 미터). 지평선과의 완벽한 수평선 정렬을 유도합니다.
 @export_range(500.0, 4000.0, 50.0) var fade_inner_radius: float = 1400.0:
 	set(val):
 		fade_inner_radius = val
 		_update_ocean_uniform("fade_inner_radius", val)
 
+## 카메라로부터 바다 표면 그리드가 완전히 투명하게 소멸하는 외부 반경(단위: 미터). 사각형 그리드 경계가 보이지 않게 원형 페이드아웃 처리합니다.
 @export_range(800.0, 5000.0, 50.0) var fade_outer_radius: float = 2400.0:
 	set(val):
 		fade_outer_radius = val
