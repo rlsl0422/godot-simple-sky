@@ -37,10 +37,11 @@ uniform float cloud_coverage : hint_range(0.0, 1.0, 0.01) = 0.45;
 uniform float cloud_density_multiplier : hint_range(0.1, 5.0, 0.1) = 1.2;
 uniform float cloud_bottom_altitude : hint_range(500.0, 5000.0, 50.0) = 1600.0; // In meters
 uniform float cloud_top_altitude : hint_range(2000.0, 10000.0, 50.0) = 4400.0;   // In meters
-uniform float cloud_scale : hint_range(0.05, 2.0, 0.01) = 0.22;                   // 1/km scale
+uniform float cloud_scale : hint_range(0.05, 2.0, 0.01) = 0.12;                   // 1/km scale
 uniform float detail_scale : hint_range(0.5, 10.0, 0.1) = 3.5;
 uniform float detail_strength : hint_range(0.0, 1.0, 0.01) = 0.35;
 uniform float weather_scale : hint_range(0.005, 0.2, 0.005) = 0.045;
+uniform float cloud_curvature_radius_km : hint_range(150.0, 3000.0, 10.0) = 300.0; // Effective planetary curvature for clouds
 
 uniform vec3 wind_direction = vec3(1.0, 0.0, 0.5);
 uniform float wind_speed : hint_range(0.0, 100.0, 0.5) = 15.0; // m/s
@@ -249,31 +250,42 @@ void compute_atmosphere(vec3 eye_pos_km, vec3 ray_dir, vec3 sun_dir, out vec3 sk
 
 // Sample Cloud Density (pos in km space)
 float sample_cloud_density(vec3 pos_km, float height_norm, vec2 wind_offset_km, float detail_fade) {
-	// 1. Weather Map Sampling (Coverage, Cloud Type, Density)
+	// 1. Multi-scale Weather Map Sampling (Coverage, Cloud Type, Density)
 	vec2 weather_uv = (pos_km.xz + wind_offset_km * 0.04) * weather_scale;
 	vec4 weather = texture(weather_tex, weather_uv);
 	
-	float cov_thresh = 1.0 - clamp(cloud_coverage * 1.25, 0.05, 0.95);
-	float cluster_mask = smoothstep(cov_thresh - 0.22, cov_thresh + 0.22, weather.r);
+	float macro_cov = weather.r;
+	// Use weather.b (density noise) as micro convective variation without expensive second texture sample
+	float micro_cov = clamp(weather.b * 1.35 - 0.15, 0.0, 1.0);
+	
+	// Dual-scale coverage combination:
+	// Macro systems establish vast cloud fronts; micro pockets populate standalone small cumulus
+	float cloud_system = max(macro_cov, micro_cov * 0.76);
+	float cov_thresh = 1.0 - clamp(cloud_coverage * 1.32, 0.08, 0.92);
+	float cluster_mask = smoothstep(cov_thresh - 0.20, cov_thresh + 0.16, cloud_system);
 	if (cluster_mask < 0.005) return 0.0;
 	
-	// 2. 3D Organic Convective Profile (Banishes flat tabletop plank):
-	float edge_taper = smoothstep(0.0, 0.50, cluster_mask);
+	// Cloud scale metric: 0.0 = small distinct cloud, 1.0 = massive cloud front
+	float cloud_size_factor = smoothstep(cov_thresh - 0.10, cov_thresh + 0.18, macro_cov);
 	
-	// Base undulates with weather map B channel (local thermal updrafts):
-	float base_undulation = (weather.b - 0.5) * 0.18;
-	float base_start = 0.02 + (1.0 - edge_taper) * 0.25 + base_undulation;
-	float base_fade = smoothstep(base_start, base_start + 0.18, height_norm);
+	// 2. 3D Convective Profile with Towering Cauliflower Updrafts:
+	float edge_taper = smoothstep(0.0, 0.45, cluster_mask);
 	
-	// Rounded dome ceiling: centers billow high into cauliflower heads, edges curve down
-	float top_ceiling = 0.65 + edge_taper * 0.32;
-	float top_fade = 1.0 - smoothstep(top_ceiling * 0.72, top_ceiling, height_norm);
+	// Base condensation line (flat, velvety underside):
+	float base_start = mix(0.04, 0.01, cloud_size_factor) + (1.0 - edge_taper) * 0.16 + (weather.b - 0.5) * 0.12;
+	float base_fade = smoothstep(base_start, base_start + 0.12, height_norm);
+	
+	// Dome top: Towers can reach up to height_norm = 0.96!
+	// Gentle rolloff so 3D Worley domes form natural rounded cauliflower peaks without being cut flat!
+	float max_height = mix(0.68, 0.96, cloud_size_factor) + edge_taper * 0.12;
+	float top_fade = smoothstep(max_height, max_height - 0.38, height_norm);
 	
 	float h_grad = base_fade * top_fade;
 	if (h_grad < 0.005) return 0.0;
 	
-	// 3. 3D Coordinates & Base Shape Texture Sampling
-	vec3 p = vec3(pos_km.x * cloud_scale, (pos_km.y - R_EARTH) * cloud_scale, pos_km.z * cloud_scale)
+	// 3. 3D Coordinates with Isotropic Spherical Lobe Scaling
+	// Vertical multiplier (1.85) ensures vertical cauliflower lobes are round and spherical rather than pancake squashed!
+	vec3 p = vec3(pos_km.x * cloud_scale, (pos_km.y - R_EARTH) * (cloud_scale * 1.85), pos_km.z * cloud_scale)
 	         + vec3(wind_offset_km.x, 0.0, wind_offset_km.y) * 0.10;
 	
 	// Domain warp from weather map channels to create wind-swept vortices
@@ -281,20 +293,23 @@ float sample_cloud_density(vec3 pos_km, float height_norm, vec2 wind_offset_km, 
 	vec4 base_sample = texture(base_noise_tex, p + warp);
 	
 	// 4. Combined Perlin-Worley + Cauliflower Billow lobes (Zone I)
-	// Base shape (R) sculpted by inverted Worley cellular domes (G, B, A)
 	float billow_worley = base_sample.g * 0.60 + base_sample.b * 0.28 + base_sample.a * 0.12;
 	// Bulging spherical cauliflower lobes: cell centers bulge outward, valleys indent
 	float lobe_sculpt = remap(base_sample.r, (1.0 - billow_worley) * 0.35, 1.0, 0.0, 1.0);
-	float cloud_shape = lobe_sculpt * (0.65 + 0.55 * billow_worley);
+	
+	// Large clouds retain an expansive, cohesive core instead of shredding into small uniform pieces
+	float core_preservation = smoothstep(0.25, 0.75, cluster_mask) * cloud_size_factor;
+	float billow_mod = mix(0.70 + 0.45 * billow_worley, 0.92 + 0.25 * billow_worley, core_preservation * 0.80);
+	float cloud_shape = lobe_sculpt * billow_mod;
 	
 	// Updraft dome accentuates rounded billows toward the top
-	float dome_boost = smoothstep(0.30, 0.85, height_norm);
-	cloud_shape = mix(cloud_shape, cloud_shape * billow_worley * 1.25, dome_boost * 0.40);
+	float dome_boost = smoothstep(0.25, 0.85, height_norm);
+	cloud_shape = mix(cloud_shape, cloud_shape * (0.75 + 0.60 * billow_worley), dome_boost * 0.55);
 	
 	float cloud_mass = cloud_shape * h_grad * cluster_mask;
 	
-	// 5. Density thresholding with smooth yet plump condensation boundary (creates puffy "몽글몽글" volume)
-	float cov_threshold = 0.16;
+	// 5. Density thresholding with smooth yet plump condensation boundary
+	float cov_threshold = mix(0.18, 0.13, core_preservation);
 	float density = smoothstep(cov_threshold, cov_threshold + 0.18, cloud_mass) * cloud_density_multiplier * 3.4;
 	
 	// 6. Micro-detail erosion: active on upper billows, suppressed on cloud base for velvety smooth underside
@@ -360,25 +375,29 @@ void sky() {
 	vec3 sun_light_color = vec3(0.0);
 	compute_atmosphere(camera_pos_km, ray_dir, sun_dir, sky_color, sun_light_color);
 	
-	// 2. Cloud Shell Ray-Sphere Intersections in km space
-	float r_bottom_km = R_EARTH + (cloud_bottom_altitude * 0.001);
-	float r_top_km = R_EARTH + (cloud_top_altitude * 0.001);
+	// 2. Curved Cloud Shell Ray-Sphere Intersections in km space
+	// Uses effective planetary curvature radius (cloud_curvature_radius_km) so distant clouds
+	// physically descend toward the horizon and merge with the sea horizon haze naturally.
+	float r_curv = cloud_curvature_radius_km;
+	vec3 cam_cloud_km = vec3(0.0, r_curv + safe_cam_alt, 0.0);
+	float r_bottom_curv = r_curv + (cloud_bottom_altitude * 0.001);
+	float r_top_curv = r_curv + (cloud_top_altitude * 0.001);
 	
 	float t_bot_0, t_bot_1;
 	float t_top_0, t_top_1;
-	bool hit_bottom = ray_sphere_intersect(camera_pos_km, ray_dir, r_bottom_km, t_bot_0, t_bot_1);
-	bool hit_top = ray_sphere_intersect(camera_pos_km, ray_dir, r_top_km, t_top_0, t_top_1);
+	bool hit_bottom = ray_sphere_intersect(cam_cloud_km, ray_dir, r_bottom_curv, t_bot_0, t_bot_1);
+	bool hit_top = ray_sphere_intersect(cam_cloud_km, ray_dir, r_top_curv, t_top_0, t_top_1);
 	
 	float t_start = -1.0;
 	float t_end = -1.0;
-	float cam_dist = length(camera_pos_km);
+	float cam_dist = length(cam_cloud_km);
 	
-	if (cam_dist < r_bottom_km) {
+	if (cam_dist < r_bottom_curv) {
 		if (hit_bottom && t_bot_1 > 0.0) {
 			t_start = max(t_bot_1, 0.0);
 			t_end = t_top_1;
 		}
-	} else if (cam_dist <= r_top_km) {
+	} else if (cam_dist <= r_top_curv) {
 		t_start = 0.0;
 		t_end = hit_bottom && t_bot_0 > 0.0 ? t_bot_0 : t_top_1;
 	} else {
@@ -388,7 +407,7 @@ void sky() {
 		}
 	}
 	
-	// Earth ground cutoff
+	// Earth ground cutoff (prevents clouds from ever dipping beneath the ocean surface)
 	float t_ground_0, t_ground_1;
 	bool hit_ground = ray_sphere_intersect(camera_pos_km, ray_dir, R_EARTH, t_ground_0, t_ground_1) && (t_ground_0 > 0.0);
 	if (hit_ground) {
@@ -446,15 +465,16 @@ void sky() {
 		for (int i = 0; i < max_steps; i++) {
 			if (current_t >= t_end || transmittance < 0.01) break;
 			
-			vec3 sample_pos = camera_pos_km + ray_dir * current_t;
-			float current_alt = length(sample_pos);
-			float height_norm = clamp((current_alt - r_bottom_km) / (r_top_km - r_bottom_km), 0.0, 1.0);
+			vec3 sample_pos_world = camera_pos_km + ray_dir * current_t;
+			vec3 sample_pos_cloud = cam_cloud_km + ray_dir * current_t;
+			float current_alt = length(sample_pos_cloud);
+			float height_norm = clamp((current_alt - r_bottom_curv) / (r_top_curv - r_bottom_curv), 0.0, 1.0);
 			
 			float detail_fade = clamp(1.0 - (current_t - (detail_lod_distance_km * 0.60)) / max(detail_lod_distance_km * 0.40, 0.001), 0.0, 1.0);
-			float density = sample_cloud_density(sample_pos, height_norm, wind_offset_km, detail_fade);
+			float density = sample_cloud_density(sample_pos_world, height_norm, wind_offset_km, detail_fade);
 			
-			// Distance fade near horizon: smoothly merges distant clouds into the horizon boundary haze
-			float horizon_fade = clamp(1.0 - (current_t - (max_distance_km * 0.65)) / (max_distance_km * 0.35), 0.0, 1.0);
+			// Distance fade near horizon: keeps clouds solid down to horizon (31km) and softly merges into white boundary haze
+			float horizon_fade = clamp(1.0 - (current_t - (max_distance_km * 0.80)) / (max_distance_km * 0.20), 0.0, 1.0);
 			density *= horizon_fade;
 			
 			if (density > 0.001) {
@@ -475,11 +495,12 @@ void sky() {
 				for (int j = 0; j < max_light_steps; j++) {
 					int idx = min(j, 3);
 					float l_dist = l_dists[idx];
-					vec3 light_pos = sample_pos + sun_dir * l_dist;
-					float l_alt = length(light_pos);
-					float l_height_norm = clamp((l_alt - r_bottom_km) / (r_top_km - r_bottom_km), 0.0, 1.0);
+					vec3 light_pos_world = sample_pos_world + sun_dir * l_dist;
+					vec3 light_pos_cloud = sample_pos_cloud + sun_dir * l_dist;
+					float l_alt = length(light_pos_cloud);
+					float l_height_norm = clamp((l_alt - r_bottom_curv) / (r_top_curv - r_bottom_curv), 0.0, 1.0);
 					
-					float l_dens = sample_cloud_density(light_pos, l_height_norm, wind_offset_km, 0.0);
+					float l_dens = sample_cloud_density(light_pos_world, l_height_norm, wind_offset_km, 0.0);
 					if (j == 0) l_dens_first = l_dens;
 					optical_depth_sun += l_dens * l_weights[idx] * 8.5;
 				}
@@ -524,7 +545,7 @@ void sky() {
 		
 		// Aerial perspective (distant clouds smoothly dissolve into white horizon haze)
 		float dist_to_clouds = min(t_start, max_distance_km);
-		float haze_factor = 1.0 - exp(-dist_to_clouds * 0.028 * atmosphere_density);
+		float haze_factor = 1.0 - exp(-dist_to_clouds * 0.026 * atmosphere_density);
 		accumulated_cloud_color = mix(accumulated_cloud_color, sky_color * (1.0 - transmittance), haze_factor * 0.72);
 		
 		// Sun disc dissolves exponentially into clouds; only forward Mie glow remains behind clouds

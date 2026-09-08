@@ -103,6 +103,16 @@ enum WeatherPreset {
 		detail_fluffiness = val
 		_update_material_uniform("detail_strength", val)
 
+@export_range(0.05, 1.0, 0.01) var cloud_scale: float = 0.15: ## Base spatial scale in 1/km
+	set(val):
+		cloud_scale = val
+		_update_material_uniform("cloud_scale", val)
+
+@export_range(150.0, 2000.0, 10.0) var cloud_curvature_radius_km: float = 450.0: ## Effective planetary curvature for clouds
+	set(val):
+		cloud_curvature_radius_km = val
+		_update_material_uniform("cloud_curvature_radius_km", val)
+
 @export_range(0.0, 5.0, 0.1) var silver_lining: float = 2.4: ## Edge rim glow when looking toward the sun
 	set(val):
 		silver_lining = val
@@ -273,20 +283,20 @@ func _apply_performance_mode(mode: PerformanceMode) -> void:
 			# Golden cross default (~50-60 FPS on MX450)
 			_update_material_uniform("max_steps", 34)
 			_update_material_uniform("max_light_steps", 3)
-			_update_material_uniform("empty_skip_multiplier", 1.3)
+			_update_material_uniform("empty_skip_multiplier", 1.6)
 			_update_material_uniform("max_distance_km", 36.0)
 			_update_material_uniform("detail_lod_distance_km", 12.0)
 		PerformanceMode.HIGH:
 			_update_material_uniform("max_steps", 48)
 			_update_material_uniform("max_light_steps", 5)
 			_update_material_uniform("empty_skip_multiplier", 1.8)
-			_update_material_uniform("max_distance_km", 38.0)
+			_update_material_uniform("max_distance_km", 45.0)
 			_update_material_uniform("detail_lod_distance_km", 18.0)
 		PerformanceMode.ULTRA:
 			_update_material_uniform("max_steps", 64)
 			_update_material_uniform("max_light_steps", 6)
 			_update_material_uniform("empty_skip_multiplier", 1.5)
-			_update_material_uniform("max_distance_km", 50.0)
+			_update_material_uniform("max_distance_km", 52.0)
 			_update_material_uniform("detail_lod_distance_km", 24.0)
 
 func _apply_weather_preset(preset: WeatherPreset) -> void:
@@ -338,6 +348,8 @@ func _sync_all_to_shader() -> void:
 	_update_material_uniform("cloud_density_multiplier", cloud_density)
 	_update_material_uniform("cloud_bottom_altitude", cloud_bottom_altitude)
 	_update_material_uniform("cloud_top_altitude", cloud_bottom_altitude + cloud_thickness)
+	_update_material_uniform("cloud_scale", cloud_scale)
+	_update_material_uniform("cloud_curvature_radius_km", cloud_curvature_radius_km)
 	_update_material_uniform("detail_strength", detail_fluffiness)
 	_update_material_uniform("silver_lining_intensity", silver_lining)
 	_update_sun_and_atmosphere()
