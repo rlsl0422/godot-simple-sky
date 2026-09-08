@@ -67,7 +67,7 @@ group_uniforms Performance;
 uniform int max_steps : hint_range(16, 96, 2) = 36;
 uniform int max_light_steps : hint_range(2, 8, 1) = 4;
 uniform float empty_skip_multiplier : hint_range(1.0, 3.0, 0.1) = 2.0;
-uniform float max_distance_km : hint_range(10.0, 60.0, 1.0) = 24.0;
+uniform float max_distance_km : hint_range(10.0, 60.0, 1.0) = 36.0;
 uniform float detail_lod_distance_km : hint_range(4.0, 20.0, 1.0) = 12.0;
 
 // ==========================================
@@ -232,6 +232,15 @@ void compute_atmosphere(vec3 eye_pos_km, vec3 ray_dir, vec3 sun_dir, out vec3 sk
 	vec3 inscattering = (total_rayleigh * BETA_R * p_rayleigh + total_mie * BETA_M * p_mie) * sun_intensity * sun_color;
 	
 	vec3 horizon_tint = mix(vec3(0.015, 0.03, 0.06), inscattering, smoothstep(-0.06, 0.08, sun_dir.y));
+	
+	// Marine Boundary Layer (MBL) forward & multiple-scattered aerosol white haze (Photo matching)
+	float h_angle = march_dir.y - horizon_dip;
+	float aerosol_band = exp(-max(h_angle, 0.0) / 0.038);
+	float sun_elev = clamp(sun_dir.y * 1.2 + 0.15, 0.05, 1.0);
+	vec3 sun_norm = sun_color * sun_elev;
+	vec3 aerosol_white = mix(vec3(0.88, 0.93, 0.98), sun_norm, 0.35) * clamp(sun_intensity * 0.058, 0.6, 1.4);
+	horizon_tint = mix(horizon_tint, aerosol_white, aerosol_band * 0.68 * clamp(sun_dir.y * 2.0 + 0.2, 0.0, 1.0));
+	
 	sky_color = horizon_tint;
 	
 	vec3 direct_sun_tau = BETA_R * optical_depth.x + BETA_M * optical_depth.y;
@@ -272,26 +281,31 @@ float sample_cloud_density(vec3 pos_km, float height_norm, vec2 wind_offset_km, 
 	vec4 base_sample = texture(base_noise_tex, p + warp);
 	
 	// 4. Combined Perlin-Worley + Cauliflower Billow lobes (Zone I)
-	// Base shape (R) modulated by medium (G) and fine (B, A) Worley lobes
-	float billow_lobes = base_sample.g * 0.60 + base_sample.b * 0.28 + base_sample.a * 0.12;
-	float cloud_shape = remap(base_sample.r, -(1.0 - billow_lobes) * 0.40, 1.0, 0.0, 1.0);
+	// Base shape (R) sculpted by inverted Worley cellular domes (G, B, A)
+	float billow_worley = base_sample.g * 0.60 + base_sample.b * 0.28 + base_sample.a * 0.12;
+	// Bulging spherical cauliflower lobes: cell centers bulge outward, valleys indent
+	float lobe_sculpt = remap(base_sample.r, (1.0 - billow_worley) * 0.35, 1.0, 0.0, 1.0);
+	float cloud_shape = lobe_sculpt * (0.65 + 0.55 * billow_worley);
 	
-	// Updraft dome has prominent rounded billow lobes (cauliflower texture)
-	cloud_shape = mix(cloud_shape, billow_lobes, smoothstep(0.35, 0.85, height_norm) * 0.45);
+	// Updraft dome accentuates rounded billows toward the top
+	float dome_boost = smoothstep(0.30, 0.85, height_norm);
+	cloud_shape = mix(cloud_shape, cloud_shape * billow_worley * 1.25, dome_boost * 0.40);
 	
 	float cloud_mass = cloud_shape * h_grad * cluster_mask;
 	
-	// 5. Density thresholding
-	float cov_threshold = 0.18;
-	float density = smoothstep(cov_threshold, cov_threshold + 0.32, cloud_mass) * cloud_density_multiplier * 3.6;
+	// 5. Density thresholding with smooth yet plump condensation boundary (creates puffy "몽글몽글" volume)
+	float cov_threshold = 0.16;
+	float density = smoothstep(cov_threshold, cov_threshold + 0.18, cloud_mass) * cloud_density_multiplier * 3.4;
 	
-	// 6. Micro-detail erosion with continuous distance LOD & smooth falloff (eliminates contour banding)
+	// 6. Micro-detail erosion: active on upper billows, suppressed on cloud base for velvety smooth underside
 	if (density > 0.005 && detail_fade > 0.01) {
 		vec3 detail_p = (p + warp) * detail_scale + vec3(wind_offset_km.x, 0.0, wind_offset_km.y) * 0.25;
 		vec4 detail_noise = texture(detail_noise_tex, detail_p);
 		float detail_fbm = detail_noise.r * 0.625 + detail_noise.g * 0.25 + detail_noise.b * 0.125;
 		float erosion = mix(detail_fbm, 1.0 - detail_fbm, clamp(height_norm * 0.5, 0.0, 1.0));
-		float erode_amount = erosion * detail_strength * 0.35 * detail_fade;
+		float base_suppress = smoothstep(0.08, 0.32, height_norm); // Velvety smooth cloud base
+		float edge_mask = clamp(1.0 - density * 0.30, 0.0, 1.0);
+		float erode_amount = erosion * detail_strength * 0.28 * detail_fade * edge_mask * base_suppress;
 		density = smoothstep(erode_amount, 1.0, density) * density;
 	}
 	
@@ -440,7 +454,7 @@ void sky() {
 			float density = sample_cloud_density(sample_pos, height_norm, wind_offset_km, detail_fade);
 			
 			// Distance fade near horizon: smoothly merges distant clouds into the horizon boundary haze
-			float horizon_fade = clamp(1.0 - (current_t - (max_distance_km * 0.55)) / (max_distance_km * 0.45), 0.0, 1.0);
+			float horizon_fade = clamp(1.0 - (current_t - (max_distance_km * 0.65)) / (max_distance_km * 0.35), 0.0, 1.0);
 			density *= horizon_fade;
 			
 			if (density > 0.001) {
@@ -454,8 +468,9 @@ void sky() {
 				
 				// Progressive multi-scale light marching toward sun (in km):
 				float optical_depth_sun = 0.0;
-				float l_dists[4] = float[4](0.15, 0.45, 1.20, 2.80);
-				float l_weights[4] = float[4](0.22, 0.48, 1.00, 1.80);
+				float l_dists[4] = float[4](0.08, 0.25, 0.80, 2.40);
+				float l_weights[4] = float[4](0.18, 0.42, 0.90, 1.70);
+				float l_dens_first = 0.0;
 				
 				for (int j = 0; j < max_light_steps; j++) {
 					int idx = min(j, 3);
@@ -465,6 +480,7 @@ void sky() {
 					float l_height_norm = clamp((l_alt - r_bottom_km) / (r_top_km - r_bottom_km), 0.0, 1.0);
 					
 					float l_dens = sample_cloud_density(light_pos, l_height_norm, wind_offset_km, 0.0);
+					if (j == 0) l_dens_first = l_dens;
 					optical_depth_sun += l_dens * l_weights[idx] * 8.5;
 				}
 				
@@ -472,18 +488,22 @@ void sky() {
 				float beer = exp(-optical_depth_sun * 0.60);
 				float powder = 1.0 - exp(-optical_depth_sun * 1.6 * powder_effect_strength);
 				float sun_light_attenuation = beer * mix(1.0, powder, 0.55);
+				
+				// Directional lobe curvature / micro-crevice shadowing (enhances "몽글몽글" spherical puffiness)
+				float lobe_curvature = clamp(1.0 - (l_dens_first - density * 0.7) * 0.25, 0.65, 1.15);
+				
 				// Multiple forward scattering softens shadow underbelly like real clouds in reference photo
 				float multi_scatter = exp(-optical_depth_sun * 0.12) * 0.45;
 				
-				// Hemispherical ambient lighting: blue skylight from above + warm terrain bounce from below
-				float crevice_ao = clamp(1.0 - density * 0.20, 0.30, 1.0);
-				vec3 sky_ambient = sky_color * 0.60 + cloud_ambient_color * 0.75;
-				vec3 ground_ambient = ground_color * 0.60 + vec3(0.06, 0.05, 0.04);
-				vec3 ambient = mix(ground_ambient, sky_ambient, clamp(height_norm * 1.2, 0.0, 1.0)) * ambient_intensity * crevice_ao;
+				// Hemispherical ambient lighting: blue skylight from above + deep oceanic bounce from below
+				float crevice_ao = clamp(1.0 - density * 0.25, 0.35, 1.0);
+				vec3 sky_ambient = sky_color * 0.65 + cloud_ambient_color * 0.70;
+				vec3 ocean_ambient = deep_water_color * 0.50 + vec3(0.02, 0.04, 0.06);
+				vec3 ambient = mix(ocean_ambient, sky_ambient, clamp(height_norm * 1.3, 0.0, 1.0)) * ambient_intensity * crevice_ao;
 				
 				vec3 sun_normalized = sun_light_color / max(sun_intensity, 1.0);
 				float phase_term = phase_cloud + silver_lining * 0.45;
-				float direct_lighting = sun_light_attenuation * phase_term + multi_scatter * 0.55;
+				float direct_lighting = (sun_light_attenuation * phase_term * lobe_curvature) + multi_scatter * 0.55;
 				vec3 direct_sun = sun_normalized * direct_lighting * 1.6;
 				vec3 step_energy = (direct_sun + ambient) * cloud_base_color;
 				
@@ -502,10 +522,10 @@ void sky() {
 			}
 		}
 		
-		// Aerial perspective (haze over distant clouds)
+		// Aerial perspective (distant clouds smoothly dissolve into white horizon haze)
 		float dist_to_clouds = min(t_start, max_distance_km);
-		float haze_factor = 1.0 - exp(-dist_to_clouds * 0.035 * atmosphere_density);
-		accumulated_cloud_color = mix(accumulated_cloud_color, sky_color * (1.0 - transmittance), haze_factor * 0.65);
+		float haze_factor = 1.0 - exp(-dist_to_clouds * 0.028 * atmosphere_density);
+		accumulated_cloud_color = mix(accumulated_cloud_color, sky_color * (1.0 - transmittance), haze_factor * 0.72);
 		
 		// Sun disc dissolves exponentially into clouds; only forward Mie glow remains behind clouds
 		vec3 direct_sun_disc = sun_disc_color * pow(transmittance, 2.2);

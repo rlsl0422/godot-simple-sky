@@ -274,7 +274,7 @@ func _apply_performance_mode(mode: PerformanceMode) -> void:
 			_update_material_uniform("max_steps", 34)
 			_update_material_uniform("max_light_steps", 3)
 			_update_material_uniform("empty_skip_multiplier", 1.3)
-			_update_material_uniform("max_distance_km", 26.0)
+			_update_material_uniform("max_distance_km", 36.0)
 			_update_material_uniform("detail_lod_distance_km", 12.0)
 		PerformanceMode.HIGH:
 			_update_material_uniform("max_steps", 48)

@@ -1,11 +1,11 @@
 {
-	"avg_fps": 39.9087438727535,
-	"avg_frame_time_ms": 25.057165497076,
-	"max_frame_time_ms": 149.557,
-	"min_frame_time_ms": 3.25300000000024,
-	"percentile_1_low_fps": 7.3960100443295,
-	"percentile_99_frame_time_ms": 135.208037037037,
+	"avg_fps": 44.1236656816427,
+	"avg_frame_time_ms": 22.663574853801,
+	"max_frame_time_ms": 150.0,
+	"min_frame_time_ms": 4.01200000000021,
+	"percentile_1_low_fps": 7.16828749611719,
+	"percentile_99_frame_time_ms": 139.503333333333,
 	"renderer": "NVIDIA GeForce MX450",
-	"timestamp": "2026-09-08T17:05:42",
+	"timestamp": "2026-09-08T17:25:07",
 	"total_frames": 570
 }
