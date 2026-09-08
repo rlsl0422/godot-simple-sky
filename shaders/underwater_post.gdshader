@@ -239,12 +239,25 @@ void fragment() {
 		godray_accum = godray_raw / (1.0 + godray_raw * 0.8);
 	}
 
-	// 7. Gentle Caustics on Solid Geometry only
+	// 7. Gentle Caustics on Solid Geometry only (Strict upward & sun-facing mask)
 	vec3 caustics_light = vec3(0.0);
 	if (!is_sky && world_pos.y <= 0.0) {
-		float depth_caustic_fade = exp(-abs(world_pos.y) * 0.10);
-		float caustic_val = evaluate_caustics(world_pos.xz, time_val);
-		caustics_light = sun_color * (caustic_val * caustics_strength * depth_caustic_fade * clamp(sun_direction.y, 0.0, 1.0));
+		vec3 sc_norm = normalize(cross(dFdy(world_pos), dFdx(world_pos)));
+		if (dot(sc_norm, -ray_dir) < 0.0) {
+			sc_norm = -sc_norm;
+		}
+
+		// Strictly mask out downward-facing surfaces (bottom of objects: normal.y <= 0)
+		float upward_factor = clamp(sc_norm.y * 3.5, 0.0, 1.0);
+		// Strictly mask out unlit surfaces facing away from the sun (dot(normal, sun_dir) <= 0)
+		float sun_lit_factor = clamp(dot(sc_norm, normalize(sun_direction)) * 3.0, 0.0, 1.0);
+		float caustics_mask = upward_factor * sun_lit_factor;
+
+		if (caustics_mask > 0.001 && sun_direction.y > 0.02) {
+			float depth_caustic_fade = exp(-abs(world_pos.y) * 0.10);
+			float caustic_val = evaluate_caustics(world_pos.xz, time_val);
+			caustics_light = sun_color * (caustic_val * caustics_strength * caustics_mask * depth_caustic_fade * clamp(sun_direction.y, 0.0, 1.0));
+		}
 	}
 
 	// 8. Final Color Assembly

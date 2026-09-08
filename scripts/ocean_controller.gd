@@ -135,7 +135,7 @@ enum OceanPreset {
 		_update_ocean_uniform("crest_foam_intensity", val)
 
 ## 해안선 및 수중 고체 오브젝트와의 접촉 거품 감지 거리(단위: 미터).
-@export_range(0.1, 5.0, 0.1) var contact_foam_distance: float = 1.4:
+@export_range(0.05, 2.0, 0.05) var contact_foam_distance: float = 0.25:
 	set(val):
 		contact_foam_distance = val
 		_update_ocean_uniform("contact_foam_distance", val)
@@ -161,6 +161,7 @@ enum OceanPreset {
 	set(val):
 		caustics_strength = val
 		_update_underwater_uniform("caustics_strength", val)
+		_update_ocean_uniform("caustics_strength", val)
 
 ## 수중 최대 가시거리(단위: 미터). 빛이 완전히 소멸되어 심해 암흑 또는 배경색으로 수렴하는 거리입니다.
 @export_range(10.0, 150.0, 5.0) var underwater_max_visibility: float = 110.0:
@@ -367,6 +368,7 @@ func _sync_all_uniforms() -> void:
 	_update_ocean_uniform("contact_foam_distance", contact_foam_distance)
 	_update_ocean_uniform("fade_inner_radius", fade_inner_radius)
 	_update_ocean_uniform("fade_outer_radius", fade_outer_radius)
+	_update_ocean_uniform("caustics_strength", caustics_strength)
 
 	_update_underwater_uniform("water_scatter_color", Vector3(underwater_scatter_color.r, underwater_scatter_color.g, underwater_scatter_color.b))
 	_update_underwater_uniform("turbidity", underwater_turbidity)

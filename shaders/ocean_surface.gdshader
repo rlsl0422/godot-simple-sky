@@ -43,7 +43,9 @@ group_uniforms Foam;
 uniform vec3 foam_color : source_color = vec3(0.92, 0.95, 0.98);
 uniform float crest_foam_threshold : hint_range(0.3, 1.0, 0.02) = 0.68;
 uniform float crest_foam_intensity : hint_range(0.0, 3.0, 0.1) = 1.4;
-uniform float contact_foam_distance : hint_range(0.1, 5.0, 0.1) = 1.4;
+uniform float contact_foam_distance : hint_range(0.05, 2.0, 0.05) = 0.25;
+uniform float caustics_strength : hint_range(0.0, 3.0, 0.1) = 0.75;
+uniform float caustics_scale : hint_range(0.1, 4.0, 0.05) = 1.4;
 
 // ==========================================
 // UNIFORMS: SUN & ATMOSPHERE LINK
@@ -241,12 +243,25 @@ vec3 evaluate_swell_normal(vec2 pos, float time_val) {
 	return normalize(cross(binormal, tangent));
 }
 
+// Gentle geometry caustics (only on solid underwater terrain/objects)
+float evaluate_caustics(vec2 xz, float time_val) {
+	vec2 uv1 = xz * caustics_scale + vec2(time_val * 0.4, time_val * 0.25);
+	vec2 uv2 = vec2(xz.x * 0.707 - xz.y * 0.707, xz.x * 0.707 + xz.y * 0.707) * (caustics_scale * 1.3) - vec2(time_val * 0.3, -time_val * 0.35);
+
+	float c1 = cos(uv1.x * 2.4 + sin(uv1.y * 1.6));
+	float c2 = sin(uv2.x * 3.1 - cos(uv2.y * 2.1));
+
+	return pow(abs(c1 * 0.6 + c2 * 0.4), 2.0);
+}
+
 // Procedural Cellular Bubble Foam (Turbulent bubble lace + organic froth, ZERO polygon confetti)
-float evaluate_organic_foam(vec2 xz, float time_val, float crest_mask, float depth_val, bool is_underwater) {
-	// Shoreline/contact foam
+float evaluate_organic_foam(vec2 xz, float time_val, float crest_mask, float depth_val, float scene_y, bool is_underwater) {
+	// Shoreline/contact foam: only active within narrow waterline band near sea surface (y ~ 0)
 	float contact_mask = 0.0;
 	if (!is_underwater && depth_val < contact_foam_distance) {
-		contact_mask = smoothstep(contact_foam_distance, 0.02, depth_val);
+		float depth_factor = smoothstep(contact_foam_distance, 0.01, depth_val);
+		float surf_band = smoothstep(0.35, 0.02, abs(scene_y));
+		contact_mask = depth_factor * surf_band;
 	}
 
 	float raw_mask = max(crest_mask, contact_mask);
@@ -363,18 +378,22 @@ void fragment() {
 	float depth_raw = texture(depth_texture, SCREEN_UV).r;
 	bool has_solid_ground = depth_raw > 0.0001 && depth_raw < 0.9999;
 	float water_depth = 10000.0;
+	vec3 scene_world_pos = vec3(0.0);
 	if (has_solid_ground) {
 		vec4 upos = INV_PROJECTION_MATRIX * vec4(SCREEN_UV * 2.0 - 1.0, depth_raw, 1.0);
 		vec3 scene_pixel_pos = upos.xyz / max(abs(upos.w), 0.00001);
 		float scene_linear_depth = -scene_pixel_pos.z;
-		if (scene_linear_depth > surface_linear_depth + 0.30) {
-			water_depth = scene_linear_depth - surface_linear_depth;
+		float depth_diff = scene_linear_depth - surface_linear_depth;
+		if (depth_diff > 0.003) {
+			water_depth = depth_diff;
+			scene_world_pos = (INV_VIEW_MATRIX * vec4(scene_pixel_pos, 1.0)).xyz;
 		} else {
 			has_solid_ground = false;
 		}
 	}
 
 	vec3 depth_transmittance = has_solid_ground ? exp(-absorption_coefficients * (water_depth / max(water_clarity * 0.25, 0.1))) : vec3(0.0);
+	float water_tint_factor = has_solid_ground ? clamp(1.0 - depth_transmittance.y, 0.0, 1.0) : 1.0;
 	vec3 water_body_color = mix(deep_water_color, shallow_water_color, clamp(depth_transmittance.y * 1.2, 0.0, 1.0));
 
 	// Fresnel & Snell's Window
@@ -406,7 +425,7 @@ void fragment() {
 	float whitecap_crest_mask = steepness_mask * height_mask;
 
 	// Procedural Cellular Sea Foam (100% free of polygon confetti!)
-	float total_foam = evaluate_organic_foam(v_world_pos.xz, time_val, whitecap_crest_mask, water_depth, is_underwater);
+	float total_foam = evaluate_organic_foam(v_world_pos.xz, time_val, whitecap_crest_mask, water_depth, scene_world_pos.y, is_underwater);
 	float foam_alt_fade = 1.0 - smoothstep(30.0, 600.0, v_cam_alt);
 	total_foam *= foam_alt_fade;
 
@@ -452,13 +471,43 @@ void fragment() {
 	vec3 diffuse_illumination = sun_color * (sun_intensity * 0.07 * clamp(sun_direction.y, 0.05, 1.0)) + sky_ambient_color * 0.70;
 	vec3 upwelling_ocean = deep_water_color * diffuse_illumination * wave_ao;
 
-	// Refracted scene color: only active when solid objects/terrain are submerged underneath
+	// Refracted scene color & submerged caustics: only active when solid objects/terrain are submerged underneath
 	vec3 water_composite = upwelling_ocean;
 	if (has_solid_ground) {
-		vec2 refract_offset = (VIEW_MATRIX * vec4(N.x, 0.0, N.z, 0.0)).xy * (0.028 / max(surface_linear_depth * 0.08 + 1.0, 1.0));
+		vec2 refract_offset = (VIEW_MATRIX * vec4(N.x, 0.0, N.z, 0.0)).xy * (0.022 / max(surface_linear_depth * 0.08 + 1.0, 1.0));
 		vec2 ref_uv = clamp(SCREEN_UV + refract_offset, vec2(0.001), vec2(0.999));
+
+		// Validate refraction depth: if refracted pixel hits geometry in front of surface (e.g. above waterline), cancel offset
+		float ref_depth_raw = texture(depth_texture, ref_uv).r;
+		vec4 ref_upos = INV_PROJECTION_MATRIX * vec4(ref_uv * 2.0 - 1.0, ref_depth_raw, 1.0);
+		float ref_linear_depth = -(ref_upos.xyz / max(abs(ref_upos.w), 0.00001)).z;
+		if (ref_linear_depth <= surface_linear_depth + 0.002) {
+			ref_uv = SCREEN_UV;
+		}
+
 		vec3 refracted_scene = texture(screen_texture, ref_uv).rgb;
-		water_composite = mix(refracted_scene * depth_transmittance, water_body_color, 1.0 - depth_transmittance.y * 0.7);
+
+		// Reconstruct geometric normal of submerged scene geometry using screen-space derivatives
+		vec3 sc_norm = normalize(cross(dFdy(scene_world_pos), dFdx(scene_world_pos)));
+		if (dot(sc_norm, V) < 0.0) {
+			sc_norm = -sc_norm;
+		}
+
+		// Strictly mask out downward-facing surfaces (bottom of objects: normal.y <= 0)
+		float upward_factor = clamp(sc_norm.y * 3.5, 0.0, 1.0);
+		// Strictly mask out unlit surfaces facing away from the sun (dot(normal, sun_dir) <= 0)
+		float sun_lit_factor = clamp(dot(sc_norm, normalize(sun_direction)) * 3.0, 0.0, 1.0);
+		float caustics_mask = upward_factor * sun_lit_factor;
+
+		vec3 caustics_light = vec3(0.0);
+		if (caustics_mask > 0.001 && sun_direction.y > 0.02) {
+			float depth_caustic_fade = exp(-water_depth * 0.12);
+			float c_val = evaluate_caustics(scene_world_pos.xz, time_val);
+			caustics_light = sun_color * (c_val * caustics_strength * caustics_mask * depth_caustic_fade * clamp(sun_direction.y * 1.5, 0.0, 1.0));
+		}
+
+		vec3 lit_submerged_scene = refracted_scene + caustics_light;
+		water_composite = mix(lit_submerged_scene * depth_transmittance, water_body_color, water_tint_factor);
 	}
 
 	vec3 surface_color = mix(water_composite, sky_reflected, fresnel);
