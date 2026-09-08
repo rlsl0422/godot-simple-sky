@@ -175,6 +175,10 @@ func _ready() -> void:
 	_sync_all_uniforms()
 
 func _process(_delta: float) -> void:
+	# 1. Unconditionally sync lighting and time with AtmosphereController (works in Editor & Runtime)
+	_sync_environment_from_atmosphere()
+
+	# 2. Identify active camera (editor viewport or scene camera)
 	var cam: Camera3D = null
 	if Engine.is_editor_hint():
 		var vp = get_viewport()
@@ -187,20 +191,17 @@ func _process(_delta: float) -> void:
 
 	var cam_pos = cam.global_position
 
-	# 1. Camera-following grid snapping to prevent vertex crawling/swimming
+	# 3. Camera-following grid snapping to prevent vertex crawling/swimming
 	if ocean_mesh_instance:
 		var grid_step = GRID_SIZE / float(GRID_SUBDIVISIONS)
 		var snapped_x = floorf(cam_pos.x / grid_step) * grid_step
 		var snapped_z = floorf(cam_pos.z / grid_step) * grid_step
 		ocean_mesh_instance.global_position = Vector3(snapped_x, 0.0, snapped_z)
 
-	# 2. Keep underwater quad aligned to camera viewport
+	# 4. Keep underwater quad active
 	if underwater_quad:
 		underwater_quad.visible = true
-		underwater_quad.global_transform = cam.global_transform
-
-	# 3. Synchronize lighting and time with AtmosphereController
-	_sync_environment_from_atmosphere()
+		underwater_quad.global_position = cam.global_position
 
 func _init_ocean_mesh() -> void:
 	if not ocean_mesh_instance:
@@ -246,10 +247,14 @@ func _init_underwater_quad() -> void:
 		underwater_quad.material_override = mat
 
 	_underwater_mat = underwater_quad.material_override as ShaderMaterial
+	underwater_quad.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	underwater_quad.extra_cull_margin = 16384.0 # Always render regardless of frustum
+	underwater_quad.custom_aabb = AABB(Vector3(-100000.0, -100000.0, -100000.0), Vector3(200000.0, 200000.0, 200000.0))
 	underwater_quad.visible = true
 
 func _sync_environment_from_atmosphere() -> void:
+	if not atmosphere_controller:
+		atmosphere_controller = get_node_or_null("../AtmosphereCloudController") as AtmosphereController
 	if not atmosphere_controller:
 		return
 

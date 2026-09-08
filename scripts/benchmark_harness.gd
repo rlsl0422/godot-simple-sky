@@ -89,10 +89,22 @@ func _process(delta: float) -> void:
 		_benchmark_phase = 7
 		_setup_phase_7_underwater_view()
 
-	# Phase 7: Capture Underwater Physical Scattering & Snell's Window (60 frames)
+	# Phase 7: Capture Underwater Physical Scattering & Soft Godrays (60 frames)
 	elif _benchmark_phase == 7 and _frames_recorded >= 450:
 		_capture_screenshot("07_underwater_optics.png")
 		_benchmark_phase = 8
+		_setup_phase_8_underwater_antisolar()
+
+	# Phase 8: Capture Underwater Anti-Solar View (zero radial artifacts) (60 frames)
+	elif _benchmark_phase == 8 and _frames_recorded >= 510:
+		_capture_screenshot("08_underwater_antisolar.png")
+		_benchmark_phase = 9
+		_setup_phase_9_underwater_deep_extinction()
+
+	# Phase 9: Capture Deep Ocean Extinction (depth -75m, sunlight extinguished) (60 frames)
+	elif _benchmark_phase == 9 and _frames_recorded >= 570:
+		_capture_screenshot("09_underwater_deep_extinction.png")
+		_benchmark_phase = 10
 		auto_benchmark = false
 		_finalize_benchmark()
 
@@ -152,11 +164,31 @@ func _setup_phase_6_ocean_view() -> void:
 	camera.look_at_from_position(camera.global_position, camera.global_position + look_dir, Vector3.UP)
 
 func _setup_phase_7_underwater_view() -> void:
-	print("[BenchmarkHarness] Phase 7: Underwater Physical Optics & Godrays test...")
+	print("[BenchmarkHarness] Phase 7: Near-surface underwater optics & godrays (-2.5m, FAIR_CUMULUS 14.5h)...")
+	controller.weather_preset = CloudController.WeatherPreset.FAIR_CUMULUS
+	controller.performance_mode = CloudController.PerformanceMode.MEDIUM
+	controller.time_of_day = 14.5
+	camera.global_position = Vector3(0.0, -2.5, 0.0)
+	var sun_dir = controller._current_sun_direction
+	var look_dir = (sun_dir * 0.75 + Vector3(0.0, 0.45, 0.0)).normalized()
+	camera.look_at_from_position(camera.global_position, camera.global_position + look_dir, Vector3.UP)
+
+func _setup_phase_8_underwater_antisolar() -> void:
+	print("[BenchmarkHarness] Phase 8: Underwater Anti-Solar (away from sun) test...")
 	controller.weather_preset = CloudController.WeatherPreset.CLEAR_SKY
 	controller.performance_mode = CloudController.PerformanceMode.MEDIUM
 	controller.time_of_day = 13.0
 	camera.global_position = Vector3(0.0, -8.0, 0.0)
+	var sun_dir = controller._current_sun_direction
+	var look_dir = (-sun_dir + Vector3(0.0, 0.15, 0.0)).normalized()
+	camera.look_at_from_position(camera.global_position, camera.global_position + look_dir, Vector3.UP)
+
+func _setup_phase_9_underwater_deep_extinction() -> void:
+	print("[BenchmarkHarness] Phase 9: Deep Ocean Extinction (-75m) test...")
+	controller.weather_preset = CloudController.WeatherPreset.CLEAR_SKY
+	controller.performance_mode = CloudController.PerformanceMode.MEDIUM
+	controller.time_of_day = 13.0
+	camera.global_position = Vector3(0.0, -75.0, 0.0)
 	var sun_dir = controller._current_sun_direction
 	var look_dir = (sun_dir * 0.75 + Vector3(0.0, 0.45, 0.0)).normalized()
 	camera.look_at_from_position(camera.global_position, camera.global_position + look_dir, Vector3.UP)

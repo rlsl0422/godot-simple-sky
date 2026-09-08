@@ -63,48 +63,61 @@ void fragment() {
 		discard;
 	}
 
-	// 1. Precise, UN-JITTERED Depth Reconstruction (Zero mosaic noise)
+	// 1. Mathematically exact view ray reconstruction (independent of depth buffer, NaN-free)
+	vec4 view_ray_h = INV_PROJECTION_MATRIX * vec4(SCREEN_UV * 2.0 - 1.0, 1.0, 1.0);
+	vec3 view_ray = view_ray_h.xyz / max(abs(view_ray_h.w), 0.00001);
+	vec3 ray_dir = normalize((INV_VIEW_MATRIX * vec4(view_ray, 0.0)).xyz);
+
+	// 2. Depth buffer reading & solid geometry hit distance
 	float raw_depth = texture(depth_texture, SCREEN_UV).r;
 	vec3 scene_color = texture(screen_texture, SCREEN_UV).rgb;
 
-	vec4 ndc = vec4(SCREEN_UV * 2.0 - 1.0, raw_depth, 1.0);
-	vec4 view_h = INV_PROJECTION_MATRIX * ndc;
-	vec3 view_pos = view_h.xyz / view_h.w;
-	vec3 world_pos = (INV_VIEW_MATRIX * vec4(view_pos, 1.0)).xyz;
+	// In Godot 4 Forward+ (Vulkan reversed-Z), clear sky depth is 0.0 (or 1.0 in some backends)
+	bool is_sky = raw_depth <= 0.0001 || raw_depth >= 0.9999;
 
-	bool is_sky = raw_depth >= 0.9999 || raw_depth <= 0.0001;
-	float ray_dist = is_sky ? max_visibility_meters : length(view_pos);
-	ray_dist = min(ray_dist, max_visibility_meters);
-
-	vec3 ray_dir = normalize(world_pos - cam_pos);
-
-	// Underwater ray length
-	float water_path = ray_dist;
-	if (world_pos.y > 0.0 && ray_dir.y > 0.001) {
-		float dist_to_surface = -cam_pos.y / ray_dir.y;
-		water_path = clamp(dist_to_surface, 0.0, ray_dist);
+	float solid_dist = max_visibility_meters;
+	vec3 world_pos = cam_pos + ray_dir * max_visibility_meters;
+	if (!is_sky) {
+		vec4 scene_h = INV_PROJECTION_MATRIX * vec4(SCREEN_UV * 2.0 - 1.0, raw_depth, 1.0);
+		vec3 scene_vpos = scene_h.xyz / max(abs(scene_h.w), 0.00001);
+		solid_dist = min(length(scene_vpos), max_visibility_meters);
+		world_pos = (INV_VIEW_MATRIX * vec4(scene_vpos, 1.0)).xyz;
 	}
 
-	// 2. Spectral Beer-Lambert Extinction
+	// Distance to water surface (y = 0) along view ray
+	float dist_to_surface = ray_dir.y > 0.001 ? (-cam_pos.y / ray_dir.y) : max_visibility_meters;
+	float water_path = min(solid_dist, dist_to_surface);
+
+	// 3. Spectral Beer-Lambert Extinction
 	vec3 extinction = exp(-absorption_coefficients * water_path);
 
-	// 3. Crystal Clear Tropical In-Scattering
+	// 4. Crystal Clear Tropical In-Scattering
 	float depth_below_surface = max(-cam_pos.y, 0.0);
-	float sun_down_attenuation = exp(-absorption_coefficients.y * depth_below_surface * 0.10);
-	vec3 ambient_sun = sun_color * (sun_intensity * 0.07 * sun_down_attenuation);
+	float sun_down_attenuation = exp(-depth_below_surface * 0.05);
+	vec3 ambient_sun = sun_color * (sun_intensity * 0.05 * sun_down_attenuation);
 
 	float inscatter_factor = 1.0 - exp(-turbidity * water_path);
-	vec3 local_scatter_color = mix(water_scatter_color, deep_extinction_color, clamp(depth_below_surface * 0.03, 0.0, 1.0));
-	vec3 inscattered_light = local_scatter_color * (ambient_sun + vec3(0.06, 0.16, 0.26)) * inscatter_factor;
+	vec3 local_scatter_color = mix(water_scatter_color, deep_extinction_color, clamp(depth_below_surface * 0.02, 0.0, 1.0));
+	vec3 inscattered_light = local_scatter_color * (ambient_sun + vec3(0.04, 0.12, 0.22)) * inscatter_factor;
 
-	// 4. NATURAL, SUBTLE GODRAYS (Completely free of circular slicing rings)
+	// 5. NATURAL, SUBTLE GODRAYS (Directional, Depth-Attenuated, Zero Anti-Solar Artifacts)
 	vec3 godray_accum = vec3(0.0);
 	vec3 sun_norm = normalize(sun_direction);
 	float sun_cos = dot(ray_dir, sun_norm);
-	float forward_phase = phase_hg(sun_cos, godray_phase_g);
 
-	if (sun_direction.y > 0.02 && godray_intensity > 0.01) {
-		// Continuous radial beam fan (aligned with solar vector)
+	// Strict Forward Hemisphere Mask: completely eliminates 100% of rays in anti-solar direction
+	// Rays only appear when looking toward the sun (fading to 0 at 78 degrees off-axis)
+	float sun_forward_mask = smoothstep(0.20, 0.60, sun_cos);
+
+	// Monotonic Physical Depth Extinction:
+	// Sunlight exponentially extinguishes with depth into the deep ocean.
+	// Red vanishes in 5m, green in 30m, blue penetrates deeper but extinguishes by 80-100m.
+	vec3 solar_depth_decay = exp(-vec3(0.35, 0.08, 0.045) * depth_below_surface);
+
+	if (sun_direction.y > 0.02 && godray_intensity > 0.01 && sun_forward_mask > 0.001) {
+		float forward_phase = phase_hg(sun_cos, godray_phase_g);
+
+		// Continuous radial beam fan aligned with solar vector
 		vec3 up_ref = abs(sun_norm.y) < 0.99 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0);
 		vec3 sun_right = normalize(cross(sun_norm, up_ref));
 		vec3 sun_up = cross(sun_right, sun_norm);
@@ -112,18 +125,18 @@ void fragment() {
 		float radial_dist = length(radial_coords);
 		float radial_angle = atan(radial_coords.y, radial_coords.x);
 
-		// 3 Harmonic angular beam frequencies for natural organic sunbeams
-		float b1 = sin(radial_angle * 12.0 + time_val * 0.20) * 0.5 + 0.5;
-		float b2 = cos(radial_angle * 19.0 - time_val * 0.28) * 0.5 + 0.5;
-		float b3 = sin(radial_angle * 29.0 + time_val * 0.15) * 0.5 + 0.5;
-		float radial_fan = pow(b1 * 0.52 + b2 * 0.33 + b3 * 0.15, godray_sharpness);
+		// 3 Harmonic angular beam frequencies for organic sunbeams
+		float b1 = sin(radial_angle * 11.0 + time_val * 0.18) * 0.5 + 0.5;
+		float b2 = cos(radial_angle * 17.0 - time_val * 0.24) * 0.5 + 0.5;
+		float b3 = sin(radial_angle * 27.0 + time_val * 0.12) * 0.5 + 0.5;
+		float radial_fan = pow(b1 * 0.55 + b2 * 0.30 + b3 * 0.15, godray_sharpness);
 
-		// Smooth core blending to eliminate any central star pinch
-		radial_fan = mix(0.70, radial_fan, smoothstep(0.03, 0.22, radial_dist));
+		// Smooth core blending to eliminate central star pinch
+		radial_fan = mix(0.75, radial_fan, smoothstep(0.04, 0.25, radial_dist));
 
-		// Volumetric water column integration: smooth vertical extinction WITHOUT slicing moire
-		const int GODRAY_STEPS = 12;
-		float march_limit = min(water_path, 45.0);
+		// Volumetric water column integration along view ray
+		const int GODRAY_STEPS = 10;
+		float march_limit = min(water_path, 30.0);
 		float step_len = march_limit / float(GODRAY_STEPS);
 
 		float depth_accum = 0.0;
@@ -133,18 +146,23 @@ void fragment() {
 			if (sample_p.y > 0.0) break;
 
 			float s_depth = -sample_p.y;
-			// Smooth continuous water attenuation
-			float light_atten = exp(-absorption_coefficients.y * (s_depth * 0.14 + march_d * 0.05));
+			// Vertical extinction from surface downwards
+			float light_atten = exp(-s_depth * 0.08);
 			depth_accum += light_atten * step_len;
 		}
 
-		// Subtle, natural godray energy
-		vec3 beam_tint = mix(sun_color, vec3(0.30, 0.90, 1.0), 0.35);
-		vec3 godray_raw = beam_tint * (depth_accum * radial_fan * forward_phase * godray_intensity * 0.14 * clamp(sun_direction.y * 1.5, 0.0, 1.0));
-		godray_accum = godray_raw / (1.0 + godray_raw * 0.4);
+		// Normalized path factor: strictly bounded in [0, 1] so deep water never amplifies energy
+		float path_norm = depth_accum / max(march_limit, 1.0);
+
+		// Soft, natural godray energy tinted with tropical cyan and attenuated by camera depth
+		vec3 beam_tint = mix(sun_color, vec3(0.25, 0.85, 0.98), 0.45);
+		vec3 godray_raw = beam_tint * solar_depth_decay * (path_norm * radial_fan * forward_phase * sun_forward_mask * godray_intensity * 0.30 * clamp(sun_direction.y * 1.5, 0.0, 1.0));
+		
+		// Soft shoulder tone compression (prevents blinding blowout near surface)
+		godray_accum = godray_raw / (1.0 + godray_raw * 0.8);
 	}
 
-	// 5. Gentle Caustics on Solid Geometry only
+	// 6. Gentle Caustics on Solid Geometry only
 	vec3 caustics_light = vec3(0.0);
 	if (!is_sky && world_pos.y <= 0.0) {
 		float depth_caustic_fade = exp(-abs(world_pos.y) * 0.10);
@@ -152,7 +170,7 @@ void fragment() {
 		caustics_light = sun_color * (caustic_val * caustics_strength * depth_caustic_fade * clamp(sun_direction.y, 0.0, 1.0));
 	}
 
-	// 6. Final Color Assembly
+	// 7. Final Color Assembly
 	vec3 attenuated_scene = (scene_color + caustics_light) * extinction;
 	vec3 final_color = attenuated_scene + inscattered_light + godray_accum;
 
