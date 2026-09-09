@@ -169,9 +169,12 @@ enum WeatherPreset {
 @export var animate_time: bool = true
 @export_range(0.0, 10.0, 0.1) var time_progression_speed: float = 0.05 ## Hours per real-time minute
 
-# Internal references
+# Internal references & dynamic lighting state
 var _sky_material: ShaderMaterial
 var _current_sun_direction: Vector3 = Vector3(0.0, 0.5, -0.866)
+var current_sun_direction: Vector3 = Vector3(0.0, 0.5, -0.866)
+var current_sun_color: Color = Color(1.0, 0.96, 0.90)
+var current_sun_energy: float = 24.0
 
 func _ready() -> void:
 	_setup_materials_and_textures()
@@ -263,6 +266,10 @@ func _update_sun_and_atmosphere() -> void:
 		dynamic_sun_color = Color(0.15, 0.22, 0.35)
 		dynamic_energy = 0.5
 		
+	current_sun_direction = _current_sun_direction
+	current_sun_color = dynamic_sun_color
+	current_sun_energy = dynamic_energy
+
 	_update_material_uniform("sun_direction", _current_sun_direction)
 	_update_material_uniform("sun_color", Vector3(dynamic_sun_color.r, dynamic_sun_color.g, dynamic_sun_color.b))
 	_update_material_uniform("sun_intensity", dynamic_energy)

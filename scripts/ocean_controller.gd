@@ -83,7 +83,7 @@ enum OceanPreset {
 # ==========================================
 @export_group("Water Optics")
 ## Deep water body color. Controls the deep indigo/sapphire upwelling radiance scattered back from the ocean volume.
-@export var deep_water_color: Color = Color(0.006, 0.040, 0.115):
+@export var deep_water_color: Color = Color(0.004, 0.026, 0.085):
 	set(val):
 		deep_water_color = val
 		_update_ocean_uniform("deep_water_color", Vector3(val.r, val.g, val.b))
@@ -315,20 +315,67 @@ func _sync_environment_from_atmosphere() -> void:
 	if not atmosphere_controller:
 		return
 
-	var sun_dir = atmosphere_controller._current_sun_direction
-	var sun_col = atmosphere_controller.sun_color
-	var sun_int = atmosphere_controller.sun_intensity
+	var sun_dir = atmosphere_controller.current_sun_direction if ("current_sun_direction" in atmosphere_controller) else atmosphere_controller._current_sun_direction
+	var sun_col = atmosphere_controller.current_sun_color if ("current_sun_color" in atmosphere_controller) else atmosphere_controller.sun_color
+	var sun_int = atmosphere_controller.current_sun_energy if ("current_sun_energy" in atmosphere_controller) else atmosphere_controller.sun_intensity
 	var time_sec = Time.get_ticks_msec() * 0.001
 
-	# Approximate sky ambient & horizon colors from solar elevation
-	var sun_height = clampf(sun_dir.y, 0.0, 1.0)
-	var sky_amb = Color(0.06, 0.22, 0.52).lerp(Color(0.85, 0.45, 0.20), clampf((0.2 - sun_dir.y) * 4.0, 0.0, 1.0))
-	var sky_hor = Color(0.26, 0.52, 0.76).lerp(Color(0.95, 0.55, 0.25), clampf((0.2 - sun_dir.y) * 4.0, 0.0, 1.0))
+	# Physical 24-Hour Day-Night Sky & Horizon Optical Model:
+	# Solves atmospheric sky dome radiance and sea horizon reflectance across all solar elevations.
+	var sun_y = sun_dir.y
+	var sky_amb: Color
+	var sky_hor: Color
+	var effective_sun_energy: float
+
+	# Solar Elevation Thresholds:
+	# sun_y >= 0.15: Broad Daylight (deep atmospheric blue zenith, deep maritime horizon)
+	# 0.02 < sun_y < 0.15: Golden Hour Sunset/Sunrise (amber horizon, violet-blue sky)
+	# -0.15 <= sun_y <= 0.02: Twilight / Dusk (golden sunset fading rapidly to indigo dusk)
+	# sun_y < -0.15: Deep Night / Midnight (dark obsidian navy sea, deep midnight indigo sky)
+
+	if sun_y >= 0.15:
+		# 1. Daylight: High sun elevation
+		# Deeper maritime sky tones to ensure rich deep ultramarine/navy ocean rather than pale sky blue
+		sky_amb = Color(0.035, 0.120, 0.350)
+		sky_hor = Color(0.140, 0.340, 0.580)
+		effective_sun_energy = sun_int
+	elif sun_y > 0.02:
+		# 2. Transition: Daylight <-> Golden Hour (Sunset / Sunrise)
+		var t = clampf((0.15 - sun_y) / 0.13, 0.0, 1.0)
+		var day_amb = Color(0.035, 0.120, 0.350)
+		var day_hor = Color(0.140, 0.340, 0.580)
+		var sunset_amb = Color(0.160, 0.120, 0.300)
+		var sunset_hor = Color(0.950, 0.480, 0.180)
+		sky_amb = day_amb.lerp(sunset_amb, t)
+		sky_hor = day_hor.lerp(sunset_hor, t)
+		effective_sun_energy = sun_int
+	elif sun_y >= -0.15:
+		# 3. Transition: Golden Hour <-> Twilight / Dusk (Sun below horizon)
+		var t = clampf((0.02 - sun_y) / 0.17, 0.0, 1.0)
+		var sunset_amb = Color(0.160, 0.120, 0.300)
+		var sunset_hor = Color(0.950, 0.480, 0.180)
+		var twilight_amb = Color(0.008, 0.015, 0.038)
+		var twilight_hor = Color(0.018, 0.032, 0.075)
+		sky_amb = sunset_amb.lerp(twilight_amb, t)
+		sky_hor = sunset_hor.lerp(twilight_hor, t)
+		# Direct sun energy cuts off rapidly when sun sets below horizon
+		effective_sun_energy = lerpf(sun_int * 0.4, 0.0, t)
+	else:
+		# 4. Deep Night / Midnight (e.g. 2:30 AM, 00:00 AM, 04:00 AM)
+		# Deep midnight navy/indigo tones (진한 군청색 밤바다)
+		var t = clampf((-0.15 - sun_y) / 0.15, 0.0, 1.0)
+		var twilight_amb = Color(0.008, 0.015, 0.038)
+		var twilight_hor = Color(0.018, 0.032, 0.075)
+		var night_amb = Color(0.0015, 0.0035, 0.010)
+		var night_hor = Color(0.0035, 0.0080, 0.020)
+		sky_amb = twilight_amb.lerp(night_amb, t)
+		sky_hor = twilight_hor.lerp(night_hor, t)
+		effective_sun_energy = 0.0
 
 	if _ocean_mat:
 		_ocean_mat.set_shader_parameter("sun_direction", sun_dir)
 		_ocean_mat.set_shader_parameter("sun_color", Vector3(sun_col.r, sun_col.g, sun_col.b))
-		_ocean_mat.set_shader_parameter("sun_intensity", sun_int)
+		_ocean_mat.set_shader_parameter("sun_intensity", effective_sun_energy)
 		_ocean_mat.set_shader_parameter("sky_ambient_color", Vector3(sky_amb.r, sky_amb.g, sky_amb.b))
 		_ocean_mat.set_shader_parameter("sky_horizon_color", Vector3(sky_hor.r, sky_hor.g, sky_hor.b))
 		_ocean_mat.set_shader_parameter("custom_time", time_sec)
@@ -342,7 +389,7 @@ func _sync_environment_from_atmosphere() -> void:
 	if _underwater_mat:
 		_underwater_mat.set_shader_parameter("sun_direction", sun_dir)
 		_underwater_mat.set_shader_parameter("sun_color", Vector3(sun_col.r, sun_col.g, sun_col.b))
-		_underwater_mat.set_shader_parameter("sun_intensity", sun_int)
+		_underwater_mat.set_shader_parameter("sun_intensity", effective_sun_energy)
 		_underwater_mat.set_shader_parameter("custom_time", time_sec)
 
 func _update_wind_direction() -> void:
@@ -410,7 +457,7 @@ func _apply_ocean_preset(preset: OceanPreset) -> void:
 			wave_length = 38.0
 			wave_speed = 1.2
 			wave_steepness = 0.55
-			deep_water_color = Color(0.007, 0.045, 0.125)
+			deep_water_color = Color(0.004, 0.026, 0.085)
 			water_clarity = 22.0
 			surface_roughness = 0.06
 			crest_foam_threshold = 0.74
@@ -424,7 +471,7 @@ func _apply_ocean_preset(preset: OceanPreset) -> void:
 			wave_length = 55.0
 			wave_speed = 1.8
 			wave_steepness = 0.72
-			deep_water_color = Color(0.006, 0.040, 0.115)
+			deep_water_color = Color(0.003, 0.022, 0.075)
 			water_clarity = 15.0
 			surface_roughness = 0.08
 			crest_foam_threshold = 0.52

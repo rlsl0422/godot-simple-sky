@@ -22,7 +22,7 @@ uniform float rayleigh_strength : hint_range(0.1, 4.0, 0.1) = 1.0;
 uniform float mie_strength : hint_range(0.0, 5.0, 0.1) = 1.2;
 uniform float ozone_strength : hint_range(0.0, 4.0, 0.1) = 1.2;
 uniform vec3 ground_color : source_color = vec3(0.18, 0.22, 0.20);
-uniform vec3 deep_water_color : source_color = vec3(0.012, 0.080, 0.220);
+uniform vec3 deep_water_color : source_color = vec3(0.004, 0.026, 0.085);
 
 // ==========================================
 // UNIFORMS: VOLUMETRIC CLOUDS
@@ -372,11 +372,13 @@ vec3 compute_distant_ocean(vec3 eye_pos_km, vec3 ray_dir, vec3 sun_dir, vec3 sun
 	float alpha2 = 0.02;
 	float denom = (NdotH * NdotH * (alpha2 - 1.0) + 1.0);
 	float D = alpha2 / (3.14159265 * denom * denom + 0.0001);
-	vec3 specular = sun_light_color * D * fresnel * clamp(sun_dir.y * 1.5, 0.0, 1.0) * 0.35;
+	float sun_above_horizon = smoothstep(-0.04, 0.06, sun_dir.y);
+	float sun_elev = sun_above_horizon * clamp(sun_dir.y, 0.0, 1.0);
+	vec3 specular = sun_light_color * D * fresnel * clamp(sun_dir.y * 1.5, 0.0, 1.0) * 0.35 * sun_above_horizon;
 	
 	// Deep Ocean Base Color + Fresnel Reflection of Sky
-	vec3 diffuse_water = deep_water_color * (sun_light_color * 0.07 * clamp(sun_dir.y, 0.05, 1.0) + sky_color * 0.70);
-	vec3 reflected_sky = mix(sky_color * 0.75, vec3(0.18, 0.38, 0.65), 0.45);
+	vec3 diffuse_water = deep_water_color * (sun_light_color * 0.07 * sun_elev + sky_color * 0.70);
+	vec3 reflected_sky = mix(sky_color * 0.75, vec3(0.06, 0.18, 0.38), 0.40);
 	vec3 ocean_surface = mix(diffuse_water, reflected_sky, fresnel) + specular;
 	
 	return ocean_surface;

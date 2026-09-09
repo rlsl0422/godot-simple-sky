@@ -28,8 +28,8 @@ uniform vec2 primary_wind_dir = vec2(0.866, 0.5);
 // UNIFORMS: WATER OPTICS & COLORS
 // ==========================================
 group_uniforms Water_Optics;
-uniform vec3 deep_water_color : source_color = vec3(0.012, 0.080, 0.220);
-uniform vec3 shallow_water_color : source_color = vec3(0.040, 0.320, 0.480);
+uniform vec3 deep_water_color : source_color = vec3(0.004, 0.026, 0.085);
+uniform vec3 shallow_water_color : source_color = vec3(0.015, 0.120, 0.180);
 uniform vec3 sss_color : source_color = vec3(0.03, 0.28, 0.32);
 uniform float sss_intensity : hint_range(0.0, 5.0, 0.1) = 1.0;
 uniform float water_clarity : hint_range(1.0, 80.0, 1.0) = 22.0;
@@ -54,8 +54,8 @@ group_uniforms Sun_and_Atmosphere;
 uniform vec3 sun_direction = vec3(0.0, 0.5, -0.866);
 uniform vec3 sun_color : source_color = vec3(1.0, 0.95, 0.88);
 uniform float sun_intensity : hint_range(0.0, 50.0, 0.1) = 22.0;
-uniform vec3 sky_ambient_color : source_color = vec3(0.06, 0.22, 0.52);
-uniform vec3 sky_horizon_color : source_color = vec3(0.26, 0.52, 0.76);
+uniform vec3 sky_ambient_color : source_color = vec3(0.035, 0.120, 0.350);
+uniform vec3 sky_horizon_color : source_color = vec3(0.140, 0.340, 0.580);
 
 // ==========================================
 // UNIFORMS: HORIZON & DISTANCE FADE
@@ -454,7 +454,9 @@ void fragment() {
 	float G = g_v * g_l;
 
 	float ggx_spec = (D * G * f_spec) / max(4.0 * NdotV * NdotL, 0.01);
-	vec3 raw_spec = sun_color * (sun_intensity * 3.8) * ggx_spec * clamp(NdotL, 0.0, 1.0);
+	float sun_above_horizon = smoothstep(-0.04, 0.06, sun_direction.y);
+	float sun_elev_factor = sun_above_horizon * clamp(sun_direction.y, 0.0, 1.0);
+	vec3 raw_spec = sun_color * (sun_intensity * 3.8) * ggx_spec * clamp(NdotL, 0.0, 1.0) * sun_above_horizon;
 	// Soft HDR compression strictly prevents FP16 buffer overflow
 	vec3 sun_specular_energy = raw_spec / (vec3(1.0) + raw_spec * (1.0 / 30.0));
 
@@ -468,7 +470,7 @@ void fragment() {
 	vec3 sky_reflected = mix(sky_horizon_color, sky_ambient_color, sqrt(sky_elevation)) * wave_ao;
 
 	// Physical Upwelling Radiance (Diffuse water volume backscattering from sun + sky dome)
-	vec3 diffuse_illumination = sun_color * (sun_intensity * 0.07 * clamp(sun_direction.y, 0.05, 1.0)) + sky_ambient_color * 0.70;
+	vec3 diffuse_illumination = sun_color * (sun_intensity * 0.07 * sun_elev_factor) + sky_ambient_color * 0.70;
 	vec3 upwelling_ocean = deep_water_color * diffuse_illumination * wave_ao;
 
 	// Refracted scene color & submerged caustics: only active when solid objects/terrain are submerged underneath
@@ -516,8 +518,8 @@ void fragment() {
 	surface_color = mix(surface_color, foam_color, total_foam);
 
 	// Distant planetary ocean model (100% identical optical model to atmosphere_clouds.gdshader)
-	vec3 diffuse_water = deep_water_color * (sun_color * (sun_intensity * 0.07 * clamp(sun_direction.y, 0.05, 1.0)) + sky_ambient_color * 0.70);
-	vec3 dist_reflected_sky = mix(sky_ambient_color * 0.75, sky_horizon_color, 0.45);
+	vec3 diffuse_water = deep_water_color * (sun_color * (sun_intensity * 0.07 * sun_elev_factor) + sky_ambient_color * 0.70);
+	vec3 dist_reflected_sky = mix(sky_ambient_color * 0.75, sky_horizon_color, 0.40);
 	float dist_fresnel = 0.02 + (1.0 - 0.02) * pow(1.0 - NdotV, 5.0);
 	vec3 distant_ocean_color = mix(diffuse_water, dist_reflected_sky, dist_fresnel) + (sun_specular_energy * 0.65);
 

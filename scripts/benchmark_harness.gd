@@ -21,11 +21,29 @@ var _coverage_test_steps: Array[float] = [0.32, 0.35, 0.38, 0.41, 0.44]
 var _cov_step_idx: int = 0
 var _cov_step_frames: int = 0
 
+var _is_time_test: bool = false
+var _time_test_steps: Array[Dictionary] = [
+	{"time": 0.0, "name": "time_00h_midnight.png", "desc": "00:00 Midnight (Deep Navy Sea)"},
+	{"time": 2.55, "name": "time_02h30_user_reported.png", "desc": "02:33 Deep Night (User Reported Bug Fixed)"},
+	{"time": 4.0, "name": "time_04h_dawn.png", "desc": "04:00 Dawn Twilight (Astronomical Dusk)"},
+	{"time": 8.0, "name": "time_08h_morning.png", "desc": "08:00 Morning (Vibrant Azure Ocean)"},
+	{"time": 12.0, "name": "time_12h_noon.png", "desc": "12:00 Solar Noon (Deep Ultramarine/Navy Ocean)"},
+	{"time": 16.0, "name": "time_16h_afternoon.png", "desc": "16:00 Afternoon (Deep Sapphire Ocean & Sun Glitter)"},
+	{"time": 18.0, "name": "time_18h_sunset.png", "desc": "18:00 Golden Sunset (Warm Amber Specular Lane)"},
+	{"time": 20.0, "name": "time_20h_dusk.png", "desc": "20:00 Dusk Twilight (Evening Post-Sunset)"}
+]
+var _time_step_idx: int = 0
+var _time_step_frames: int = 0
+
 func _ready() -> void:
 	# Check command line args
 	var args = OS.get_cmdline_args()
 	var user_args = OS.get_cmdline_user_args()
-	if "--coverage-test" in args or "--coverage-test" in user_args:
+	if "--time-test" in args or "--time-test" in user_args:
+		_is_time_test = true
+		auto_benchmark = false
+		print("[BenchmarkHarness] Activated --time-test mode (4-hour intervals + 2:30 AM bug verification)!")
+	elif "--coverage-test" in args or "--coverage-test" in user_args:
 		_is_coverage_test = true
 		auto_benchmark = false
 		print("[BenchmarkHarness] Activated --coverage-test mode!")
@@ -51,6 +69,10 @@ func _process(delta: float) -> void:
 			controller.time_of_day
 		]
 	
+	if _is_time_test:
+		_process_time_test()
+		return
+
 	if _is_coverage_test:
 		_process_coverage_test()
 		return
@@ -311,4 +333,43 @@ func _process_coverage_test() -> void:
 		print("[BenchmarkHarness] Saved %s successfully!" % fname)
 		_cov_step_idx += 1
 		_cov_step_frames = 0
+
+func _process_time_test() -> void:
+	if _time_step_idx >= _time_test_steps.size():
+		print("[BenchmarkHarness] All 4-hour time test captures complete! Exiting...")
+		get_tree().quit()
+		return
+
+	var step = _time_test_steps[_time_step_idx]
+	var tod: float = step["time"]
+	var fname: String = step["name"]
+	var fdesc: String = step["desc"]
+
+	if _time_step_frames == 0:
+		print("[BenchmarkHarness] === Time Test Step %d/%d: %s (time_of_day = %.2f) ===" % [
+			_time_step_idx + 1, _time_test_steps.size(), fdesc, tod
+		])
+		controller.animate_time = false
+		controller.sun_latitude = 12.0
+		controller.sun_intensity = 10.0
+		controller.cloud_coverage = 0.43
+		controller.cloud_density = 0.65
+		# Ensure time_of_day is applied AFTER preset to avoid preset overriding it
+		controller.weather_preset = CloudController.WeatherPreset.CUSTOM
+		controller.time_of_day = tod
+
+		# Camera setup: exactly matches user's screenshot view
+		# Viewing submerged CSGBox3D contact line, ocean surface waves, sea horizon, and sky/clouds
+		camera.global_position = Vector3(0.64, 4.2, 9.5)
+		var target = Vector3(0.64, 0.2, -15.0)
+		camera.look_at_from_position(camera.global_position, target, Vector3.UP)
+
+	_time_step_frames += 1
+	# Allow 30 frames for shader compilation, water settling, and temporal AA
+	if _time_step_frames >= 30:
+		_capture_screenshot(fname)
+		print("[BenchmarkHarness] Saved %s (%s) successfully!" % [fname, fdesc])
+		_time_step_idx += 1
+		_time_step_frames = 0
+
 
