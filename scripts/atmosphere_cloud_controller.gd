@@ -78,12 +78,12 @@ enum WeatherPreset {
 		clouds_enabled = val
 		_update_material_uniform("clouds_enabled", val)
 
-@export_range(0.0, 1.0, 0.01) var cloud_coverage: float = 0.45: ## Overall cloud amount (0 = Clear, 1 = Dense cover)
+@export_range(0.0, 1.0, 0.01) var cloud_coverage: float = 0.43: ## Overall cloud amount (0 = Clear, 1 = Dense cover)
 	set(val):
 		cloud_coverage = val
 		_update_material_uniform("cloud_coverage", val)
 
-@export_range(0.1, 4.0, 0.05) var cloud_density: float = 1.2: ## Cloud body thickness and opacity
+@export_range(0.1, 4.0, 0.05) var cloud_density: float = 0.65: ## Cloud body thickness and opacity
 	set(val):
 		cloud_density = val
 		_update_material_uniform("cloud_density_multiplier", val)
@@ -93,17 +93,17 @@ enum WeatherPreset {
 		cloud_bottom_altitude = val
 		_update_material_uniform("cloud_bottom_altitude", val)
 
-@export_range(500.0, 6000.0, 50.0) var cloud_thickness: float = 2800.0: ## Height from base to cloud top
+@export_range(500.0, 6000.0, 50.0) var cloud_thickness: float = 2600.0: ## Height from base to cloud top
 	set(val):
 		cloud_thickness = val
 		_update_material_uniform("cloud_top_altitude", cloud_bottom_altitude + val)
 
-@export_range(0.0, 1.0, 0.01) var detail_fluffiness: float = 0.4: ## Micro edge erosion and fluffiness
+@export_range(0.0, 1.0, 0.01) var detail_fluffiness: float = 0.27: ## Micro edge erosion and fluffiness
 	set(val):
 		detail_fluffiness = val
 		_update_material_uniform("detail_strength", val)
 
-@export_range(0.05, 1.0, 0.01) var cloud_scale: float = 0.10: ## Base spatial scale in 1/km
+@export_range(0.05, 1.0, 0.01) var cloud_scale: float = 0.29: ## Base spatial scale in 1/km
 	set(val):
 		cloud_scale = val
 		_update_material_uniform("cloud_scale", val)
@@ -191,7 +191,8 @@ func _process(delta: float) -> void:
 		time_of_day = fmod(time_of_day + hours_per_sec * delta, 24.0)
 	
 	if _sky_material:
-		_sky_material.set_shader_parameter("custom_time", Time.get_ticks_msec() * 0.001)
+		if animate_time and not Engine.is_editor_hint():
+			_sky_material.set_shader_parameter("custom_time", Time.get_ticks_msec() * 0.001)
 		var cam = get_viewport().get_camera_3d() if get_viewport() else null
 		if cam:
 			_sky_material.set_shader_parameter("camera_world_position", cam.global_position)
@@ -318,9 +319,10 @@ func _apply_weather_preset(preset: WeatherPreset) -> void:
 			silver_lining = 1.8
 			time_of_day = 13.0
 		WeatherPreset.FAIR_CUMULUS:
-			cloud_coverage = 0.42
-			cloud_density = 1.3
-			detail_fluffiness = 0.42
+			cloud_coverage = 0.43
+			cloud_density = 0.65
+			detail_fluffiness = 0.27
+			cloud_scale = 0.29
 			silver_lining = 2.4
 			cloud_bottom_altitude = 1600.0
 			cloud_thickness = 2600.0

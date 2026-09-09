@@ -252,35 +252,29 @@ void compute_atmosphere(vec3 eye_pos_km, vec3 ray_dir, vec3 sun_dir, out vec3 sk
 
 // Sample Cloud Density (pos in km space)
 float sample_cloud_density(vec3 pos_km, float height_norm, vec2 wind_offset_km, float detail_fade) {
-	// 1. Multi-scale Weather Map Sampling (Coverage, Cloud Type, Density)
+	// 1. Multi-scale Weather Map Sampling with Convective Cluster Gating ("구름끼리 서로 뭉치게")
 	vec2 weather_uv = (pos_km.xz + wind_offset_km * 0.04) * weather_scale;
 	vec4 weather = texture(weather_tex, weather_uv);
 	
-	float macro_cov = weather.r;
-	// Use weather.b (density noise) as micro convective variation without expensive second texture sample
-	float micro_cov = clamp(weather.b * 1.35 - 0.15, 0.0, 1.0);
+	// Macro Cluster Envelope: Keeps clouds gathered in majestic cluster archipelagoes with clear sky corridors ("구름끼리 서로 뭉치게")
+	float cluster_thresh = mix(0.58, 0.46, smoothstep(0.30, 0.46, cloud_coverage));
 	
-	// Dual-scale coverage combination:
-	// Macro systems establish vast cloud fronts; micro pockets populate standalone small cumulus
-	float cloud_system = max(macro_cov, micro_cov * 0.76);
-	float cov_thresh = 1.0 - clamp(cloud_coverage * 1.32, 0.08, 0.92);
-	float cluster_mask = smoothstep(cov_thresh - 0.20, cov_thresh + 0.16, cloud_system);
+	// Overhead clearance: preserves open blue sky directly overhead while horizon clouds form monumental thunderheads
+	float dist_xz = length(pos_km.xz - camera_world_position.xz);
+	float zenith_mod = mix(zenith_sky_clearance * 0.09, 0.0, smoothstep(2.0, 14.0, dist_xz));
+	float effective_thresh = cluster_thresh + zenith_mod;
+	
+	float cluster_mask = smoothstep(effective_thresh - 0.15, effective_thresh + 0.15, weather.r);
 	if (cluster_mask < 0.005) return 0.0;
 	
-	// Cloud scale metric: 0.0 = small distinct cloud, 1.0 = massive cloud front
-	float cloud_size_factor = smoothstep(cov_thresh - 0.10, cov_thresh + 0.18, macro_cov);
+	// 2. 3D Convective Profile (Flat condensation base LCL + Towering Cauliflower Dome)
+	// Crisp flat Lifting Condensation Level (eliminates unnatural pinched hourglass waists)
+	float base_start = 0.025 + (weather.b - 0.5) * 0.035;
+	float base_fade = smoothstep(base_start, base_start + 0.08, height_norm);
 	
-	// 2. 3D Convective Profile with Towering Cauliflower Updrafts:
-	float edge_taper = smoothstep(0.0, 0.45, cluster_mask);
-	
-	// Base condensation line (flat, velvety underside):
-	float base_start = mix(0.04, 0.01, cloud_size_factor) + (1.0 - edge_taper) * 0.16 + (weather.b - 0.5) * 0.12;
-	float base_fade = smoothstep(base_start, base_start + 0.12, height_norm);
-	
-	// Dome top: Towering thunderheads soar up to height_norm = 0.98 (4.3km) for coastal cumulonimbus!
-	// Smaller isolated cumulus round off gently at height_norm = 0.72 (3.4km)
-	float max_height = mix(0.72, 0.98, cloud_size_factor) + edge_taper * 0.12;
-	float top_fade = smoothstep(max_height, max_height - 0.30, height_norm);
+	// Dome top: Updraft center reaches height_norm = 0.94, flank baby clouds stay lower
+	float max_height = mix(0.60, 0.94, cluster_mask);
+	float top_fade = smoothstep(max_height, max_height - 0.26, height_norm);
 
 	float h_grad = base_fade * top_fade;
 	if (h_grad < 0.005) return 0.0;
@@ -289,8 +283,7 @@ float sample_cloud_density(vec3 pos_km, float height_norm, vec2 wind_offset_km, 
 	vec3 p = vec3(pos_km.x * cloud_scale, (pos_km.y - R_EARTH) * (cloud_scale * 1.85), pos_km.z * cloud_scale)
 	         + vec3(wind_offset_km.x, 0.0, wind_offset_km.y) * 0.10;
 	
-	// Analytical irrational multi-frequency 3D curl/twist:
-	// Completely breaks 3D texture wrap periodicity and eliminates repeated wallpaper patterns
+	// Analytical irrational multi-frequency 3D curl/twist: breaks periodic tiling patterns
 	vec3 non_periodic_warp = vec3(
 		sin(p.z * 0.41 + p.y * 0.27 + 1.7),
 		sin(p.x * 0.33 + p.z * 0.31 + 2.4),
@@ -302,38 +295,40 @@ float sample_cloud_density(vec3 pos_km, float height_norm, vec2 wind_offset_km, 
 	vec3 warped_p = p + non_periodic_warp + weather_warp;
 	vec4 base_sample = texture(base_noise_tex, warped_p);
 	
-	// 4. Mother Cloud Core + Clustered Satellite Baby Cloudlets
+	// 4. Mother Core + Clustered Flank Baby Cloudlets ("큰 덩어리 주변으로 새끼 구름들이 뭉친 모양")
 	float billow_macro = base_sample.g;
 	float billow_micro = base_sample.b * 0.65 + base_sample.a * 0.35;
-	float billow_worley = billow_macro * 0.55 + billow_micro * 0.45;
 	
-	// Mother Cloud Mass: expansive, cohesive, monumental core (Image 1 style)
-	float lobe_sculpt = remap(base_sample.r, (1.0 - billow_worley) * 0.35, 1.0, 0.0, 1.0);
-	float core_preservation = smoothstep(0.20, 0.70, cluster_mask) * cloud_size_factor;
-	float billow_mod = mix(0.72 + 0.45 * billow_macro, 0.94 + 0.22 * billow_macro, core_preservation * 0.85);
-	float mother_shape = lobe_sculpt * billow_mod;
+	// In the core: macro Worley preserves a monumental, cohesive foundation (Image 1 style)
+	// Near the flanks: micro Worley sculpts lively baby clouds clustering around the mother flanks
+	float billow_blend = mix(billow_micro, billow_macro, smoothstep(0.20, 0.70, cluster_mask));
+	float billow_worley = billow_blend * 0.65 + base_sample.g * 0.35;
 	
-	// Updraft dome accentuates rounded cauliflower billows toward upper dome
+	float erosion_depth = mix(0.38, 0.24, smoothstep(0.25, 0.80, cluster_mask));
+	float lobe_sculpt = remap(base_sample.r, (1.0 - billow_worley) * erosion_depth, 1.0, 0.0, 1.0);
+	
+	// Billow sculpting preserves volumetric crevices between cauliflower lobes
+	float cloud_shape = lobe_sculpt * (0.72 + 0.48 * billow_worley);
+	
+	// Updraft dome accentuates rounded cauliflower tops
 	float dome_boost = smoothstep(0.25, 0.85, height_norm);
-	mother_shape = mix(mother_shape, mother_shape * (0.75 + 0.60 * billow_worley), dome_boost * 0.55);
-	float mother_mass = mother_shape * h_grad * cluster_mask;
+	cloud_shape = mix(cloud_shape, cloud_shape * (0.80 + 0.50 * billow_macro), dome_boost * 0.45);
 	
-	// Satellite Baby Cloudlets (Image 2 style baby puffs clustered around mother flanks):
-	// Form lively buoyant satellite cloudlets strictly in the skirt/flanks of the mother cloud
-	float halo_flank = smoothstep(0.04, 0.22, cluster_mask) * smoothstep(0.65, 0.35, cluster_mask);
-	float baby_puffs = remap(base_sample.b, 0.18, 0.88, 0.0, 1.0) * (0.60 + 0.50 * base_sample.a);
-	float baby_base_fade = smoothstep(0.01, 0.08, height_norm);
-	float baby_top_fade = smoothstep(0.55, 0.22, height_norm);
-	float baby_h_grad = baby_base_fade * baby_top_fade;
-	float baby_mass = baby_puffs * halo_flank * baby_h_grad * satellite_cloud_amount * 2.2;
+	// Mother cloud mass
+	float cloud_mass = cloud_shape * h_grad * (0.28 + 0.72 * cluster_mask);
 	
-	// Combine: Mother Cloud Mass + Clustered Baby Satellites
-	float cloud_mass = max(mother_mass, baby_mass);
+	// Satellite Baby Cloudlets: Buoyant baby puffs clustered specifically around the mother flanks
+	float flank_halo = smoothstep(0.08, 0.35, cluster_mask) * (1.0 - smoothstep(0.45, 0.85, cluster_mask) * 0.75);
+	float baby_worley = remap(base_sample.b, 0.18, 0.85, 0.0, 1.0) * (0.60 + 0.40 * base_sample.a);
+	float baby_altitude = smoothstep(0.04, 0.12, height_norm) * smoothstep(0.65, 0.28, height_norm);
+	float baby_mass = baby_worley * flank_halo * baby_altitude * satellite_cloud_amount * 0.38;
+	
+	cloud_mass += baby_mass;
 	if (cloud_mass < 0.005) return 0.0;
 	
-	// 5. Density thresholding with smooth yet plump condensation boundary
-	float cov_threshold = mix(0.18, 0.13, core_preservation);
-	float density = smoothstep(cov_threshold, cov_threshold + 0.22, cloud_mass) * cloud_density_multiplier * 3.4;
+	// 5. Density thresholding with smooth cauliflower condensation boundary
+	float cov_threshold = mix(0.25, 0.16, smoothstep(0.30, 0.45, cloud_coverage));
+	float density = smoothstep(cov_threshold, cov_threshold + 0.20, cloud_mass) * cloud_density_multiplier * 3.4;
 	
 	// 6. Micro-detail: dual-mode edge erosion + positive fluffy curling ("보송보송한 디테일")
 	if (density > 0.005 && detail_fade > 0.01) {
@@ -343,14 +338,14 @@ float sample_cloud_density(vec3 pos_km, float height_norm, vec2 wind_offset_km, 
 		
 		// Edge erosion for soft silhouettes
 		float erosion = mix(detail_fbm, 1.0 - detail_fbm, clamp(height_norm * 0.5, 0.0, 1.0));
-		float base_suppress = smoothstep(0.08, 0.32, height_norm); // Velvety smooth cloud base
-		float edge_mask = clamp(1.0 - density * 0.30, 0.0, 1.0);
-		float erode_amount = erosion * detail_strength * 0.20 * detail_fade * edge_mask * base_suppress;
+		float base_suppress = smoothstep(0.06, 0.24, height_norm); // Velvety smooth cloud base
+		float edge_mask = clamp(1.0 - density * 0.32, 0.0, 1.0);
+		float erode_amount = erosion * detail_strength * 0.24 * detail_fade * edge_mask * base_suppress;
 		density = smoothstep(erode_amount, 1.0, density) * density;
 		
 		// Fluffy positive curling on sunlit cauliflower billows
-		float fluff_boost = (1.0 - detail_fbm) * detail_strength * 0.38 * detail_fade * smoothstep(0.12, 0.65, height_norm);
-		density += fluff_boost * smoothstep(0.01, 0.25, density);
+		float fluff_boost = (1.0 - detail_fbm) * detail_strength * 0.30 * detail_fade * smoothstep(0.12, 0.65, height_norm);
+		density += fluff_boost * smoothstep(0.02, 0.28, density);
 	}
 	
 	return density;
@@ -538,17 +533,17 @@ void sky() {
 				float lobe_curvature = clamp(1.0 - (l_dens_first - density * 0.6) * 0.20, 0.75, 1.15);
 				
 				// Multiple forward scattering softens shadow underbelly (luminous pearl-white bounce)
-				float multi_scatter = exp(-optical_depth_sun * 0.055) * 0.85;
+				float multi_scatter = exp(-optical_depth_sun * 0.065) * 0.60;
 				
 				// Hemispherical ambient lighting: soft skylight from above + luminous diffuse daylight bounce from ocean
 				float crevice_ao = clamp(1.0 - density * 0.18, 0.45, 1.0);
-				vec3 sky_ambient = sky_color * 0.95 + cloud_ambient_color * 0.85;
-				vec3 ocean_ambient = mix(deep_water_color * 1.8, sky_color, 0.70) + vec3(0.20, 0.24, 0.28);
+				vec3 sky_ambient = sky_color * 0.85 + cloud_ambient_color * 0.80;
+				vec3 ocean_ambient = mix(deep_water_color * 1.6, sky_color, 0.65) + vec3(0.18, 0.22, 0.26);
 				vec3 ambient = mix(ocean_ambient, sky_ambient, clamp(height_norm * 1.2, 0.15, 1.0)) * ambient_intensity * crevice_ao;
 				
 				vec3 sun_normalized = sun_light_color / max(sun_intensity, 1.0);
 				float phase_term = phase_cloud + silver_lining * 0.45;
-				float direct_lighting = (sun_light_attenuation * phase_term * lobe_curvature) + multi_scatter * 0.65;
+				float direct_lighting = (sun_light_attenuation * phase_term * lobe_curvature) + multi_scatter * 0.50;
 				vec3 direct_sun = sun_normalized * direct_lighting * 1.6;
 				vec3 step_energy = (direct_sun + ambient) * cloud_base_color;
 				

@@ -16,11 +16,20 @@ var _frame_times: Array[float] = []
 var _benchmark_phase: int = 0
 var _metrics_data: Dictionary = {}
 
+var _is_coverage_test: bool = false
+var _coverage_test_steps: Array[float] = [0.32, 0.35, 0.38, 0.41, 0.44]
+var _cov_step_idx: int = 0
+var _cov_step_frames: int = 0
+
 func _ready() -> void:
 	# Check command line args
 	var args = OS.get_cmdline_args()
 	var user_args = OS.get_cmdline_user_args()
-	if "--no-benchmark" in args or "--no-benchmark" in user_args:
+	if "--coverage-test" in args or "--coverage-test" in user_args:
+		_is_coverage_test = true
+		auto_benchmark = false
+		print("[BenchmarkHarness] Activated --coverage-test mode!")
+	elif "--no-benchmark" in args or "--no-benchmark" in user_args:
 		auto_benchmark = false
 	if "--benchmark" in args or "--benchmark" in user_args or "--benchmark-auto" in args or "--benchmark-auto" in user_args:
 		auto_benchmark = true
@@ -42,6 +51,10 @@ func _process(delta: float) -> void:
 			controller.time_of_day
 		]
 	
+	if _is_coverage_test:
+		_process_coverage_test()
+		return
+		
 	if not auto_benchmark:
 		return
 		
@@ -262,3 +275,40 @@ func _finalize_benchmark() -> void:
 	if "--benchmark-auto" in args or "--quit-after-benchmark" in args or "--benchmark-auto" in user_args or "--quit-after-benchmark" in user_args:
 		print("[BenchmarkHarness] Exiting automatically as requested...")
 		get_tree().quit()
+
+func _process_coverage_test() -> void:
+	if _cov_step_idx >= _coverage_test_steps.size():
+		print("[BenchmarkHarness] All coverage step captures complete! Exiting...")
+		get_tree().quit()
+		return
+		
+	var cov = _coverage_test_steps[_cov_step_idx]
+	if _cov_step_frames == 0:
+		print("[BenchmarkHarness] Running Coverage Test Step %d: coverage = %.2f" % [_cov_step_idx + 1, cov])
+		controller.cloud_coverage = cov
+		controller.cloud_density = 0.65
+		controller.cloud_scale = 0.29
+		controller.detail_fluffiness = 0.27
+		controller.cloud_curvature_radius_km = 150.0
+		controller.satellite_cloud_amount = 0.45
+		controller.zenith_sky_clearance = 0.55
+		controller.time_of_day = 14.5
+		controller.sun_latitude = 12.0
+		controller.sun_intensity = 10.0
+		camera.global_position = Vector3(0.0, 50.0, 0.0)
+		var look_dir = Vector3(0.08, 0.14, -0.99).normalized()
+		camera.look_at_from_position(camera.global_position, camera.global_position + look_dir, Vector3.UP)
+		controller.animate_time = false
+		
+	if controller._sky_material:
+		controller._sky_material.set_shader_parameter("custom_time", 353.461)
+		
+	_cov_step_frames += 1
+	# Allow 25 frames for shader compilation and temporal settling
+	if _cov_step_frames >= 25:
+		var fname = "coverage_%.2f.png" % cov
+		_capture_screenshot(fname)
+		print("[BenchmarkHarness] Saved %s successfully!" % fname)
+		_cov_step_idx += 1
+		_cov_step_frames = 0
+
