@@ -130,10 +130,10 @@ func _setup_phase_3_golden_sunset() -> void:
 	print("[BenchmarkHarness] Phase 3: Setting up Golden Hour Sunset in LOW mode...")
 	controller.weather_preset = CloudController.WeatherPreset.GOLDEN_HOUR
 	controller.performance_mode = CloudController.PerformanceMode.LOW
-	controller.time_of_day = 18.2
+	controller.time_of_day = 17.6
 	camera.global_position = Vector3(0.0, 50.0, 0.0)
 	var sun_dir = controller._current_sun_direction
-	camera.look_at_from_position(camera.global_position, camera.global_position + sun_dir + Vector3(0.0, 0.12, 0.0), Vector3.UP)
+	camera.look_at_from_position(camera.global_position, camera.global_position + sun_dir + Vector3(0.0, 0.08, 0.0), Vector3.UP)
 
 func _setup_phase_4_above_clouds() -> void:
 	print("[BenchmarkHarness] Phase 4: Flying above clouds (4800m) overlooking cloud ocean...")
@@ -145,12 +145,12 @@ func _setup_phase_4_above_clouds() -> void:
 	camera.look_at_from_position(camera.global_position, camera.global_position + look_dir, Vector3.UP)
 
 func _setup_phase_5_downward_ground_and_contour() -> void:
-	print("[BenchmarkHarness] Phase 5: Testing high-altitude downward ocean blending at 2200m (14.5h, matching user screenshot)...")
+	print("[BenchmarkHarness] Phase 5: Testing downward ocean blending and contour at 50m (14.5h)...")
 	controller.weather_preset = CloudController.WeatherPreset.FAIR_CUMULUS
 	controller.performance_mode = CloudController.PerformanceMode.MEDIUM
 	controller.time_of_day = 14.5
-	camera.global_position = Vector3(0.0, 2200.0, 0.0)
-	var look_dir = Vector3(0.0, -0.75, -0.66).normalized()
+	camera.global_position = Vector3(0.0, 50.0, 0.0)
+	var look_dir = Vector3(0.0, -0.26, -1.0).normalized()
 	camera.look_at_from_position(camera.global_position, camera.global_position + look_dir, Vector3.UP)
 
 func _setup_phase_6_ocean_view() -> void:

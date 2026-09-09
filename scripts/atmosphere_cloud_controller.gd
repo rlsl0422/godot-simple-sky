@@ -103,15 +103,25 @@ enum WeatherPreset {
 		detail_fluffiness = val
 		_update_material_uniform("detail_strength", val)
 
-@export_range(0.05, 1.0, 0.01) var cloud_scale: float = 0.15: ## Base spatial scale in 1/km
+@export_range(0.05, 1.0, 0.01) var cloud_scale: float = 0.10: ## Base spatial scale in 1/km
 	set(val):
 		cloud_scale = val
 		_update_material_uniform("cloud_scale", val)
 
-@export_range(150.0, 2000.0, 10.0) var cloud_curvature_radius_km: float = 450.0: ## Effective planetary curvature for clouds
+@export_range(100.0, 2000.0, 10.0) var cloud_curvature_radius_km: float = 150.0: ## Effective planetary curvature for clouds
 	set(val):
 		cloud_curvature_radius_km = val
 		_update_material_uniform("cloud_curvature_radius_km", val)
+
+@export_range(0.0, 1.0, 0.05) var satellite_cloud_amount: float = 0.45: ## Clustered baby clouds around main cloud mass
+	set(val):
+		satellite_cloud_amount = val
+		_update_material_uniform("satellite_cloud_amount", val)
+
+@export_range(0.0, 1.0, 0.05) var zenith_sky_clearance: float = 0.55: ## Horizon vs overhead open blue sky balance
+	set(val):
+		zenith_sky_clearance = val
+		_update_material_uniform("zenith_sky_clearance", val)
 
 @export_range(0.0, 5.0, 0.1) var silver_lining: float = 2.4: ## Edge rim glow when looking toward the sun
 	set(val):
@@ -316,11 +326,11 @@ func _apply_weather_preset(preset: WeatherPreset) -> void:
 			cloud_thickness = 2600.0
 			time_of_day = 14.5
 		WeatherPreset.GOLDEN_HOUR:
-			cloud_coverage = 0.48
-			cloud_density = 1.4
+			cloud_coverage = 0.45
+			cloud_density = 1.3
 			detail_fluffiness = 0.45
 			silver_lining = 3.6
-			time_of_day = 18.2
+			time_of_day = 17.6
 		WeatherPreset.DRAMATIC_OVERCAST:
 			cloud_coverage = 0.82
 			cloud_density = 2.2
@@ -350,6 +360,8 @@ func _sync_all_to_shader() -> void:
 	_update_material_uniform("cloud_top_altitude", cloud_bottom_altitude + cloud_thickness)
 	_update_material_uniform("cloud_scale", cloud_scale)
 	_update_material_uniform("cloud_curvature_radius_km", cloud_curvature_radius_km)
+	_update_material_uniform("satellite_cloud_amount", satellite_cloud_amount)
+	_update_material_uniform("zenith_sky_clearance", zenith_sky_clearance)
 	_update_material_uniform("detail_strength", detail_fluffiness)
 	_update_material_uniform("silver_lining_intensity", silver_lining)
 	_update_sun_and_atmosphere()
