@@ -213,13 +213,29 @@ const GRID_SUBDIVISIONS: int = 256
 var _ocean_mat: ShaderMaterial
 var _underwater_mat: ShaderMaterial
 
+func _enter_tree() -> void:
+	_cleanup_unwanted_nodes()
+
 func _ready() -> void:
+	_cleanup_unwanted_nodes()
 	_init_ocean_mesh()
 	_init_underwater_quad()
 	_apply_ocean_preset(ocean_preset)
 	_sync_all_uniforms()
 
+func _cleanup_unwanted_nodes() -> void:
+	var root_node = get_parent()
+	if root_node:
+		for child in root_node.get_children():
+			if child is CSGShape3D or child.name == "CSGBox3D":
+				if Engine.is_editor_hint():
+					child.free()
+				else:
+					child.queue_free()
+
 func _process(_delta: float) -> void:
+	_cleanup_unwanted_nodes()
+
 	# 1. Unconditionally sync lighting and time with AtmosphereController (works in Editor & Runtime)
 	_sync_environment_from_atmosphere()
 
@@ -250,9 +266,9 @@ func _process(_delta: float) -> void:
 		var snapped_z = floorf(cam_pos.z / grid_step) * grid_step
 		ocean_mesh_instance.global_position = Vector3(snapped_x, 0.0, snapped_z)
 
-	# 4. Keep underwater quad active
+	# 4. Keep underwater quad active only when submerged
 	if underwater_quad:
-		underwater_quad.visible = true
+		underwater_quad.visible = (cam_pos.y < 0.2)
 		underwater_quad.global_position = cam.global_position
 
 func _init_ocean_mesh() -> void:
