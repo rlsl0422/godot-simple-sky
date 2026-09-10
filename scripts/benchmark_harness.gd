@@ -73,7 +73,7 @@ func _process(delta: float) -> void:
 		overlay_label.text = (
 			"FPS: %d (%.2f ms) | Preset: %s | Perf: %s | Time: %02d:%02d (%.2fh) [%s]\n" +
 			"Coverage: %.2f ([-/+]) | Density: %.2f ([</>]) | Scale: %.2f ([;/'\"]) | Base: %.0fm, Thk: %.0fm\n" +
-			"Controls: [Space] Play/Pause | [[ / ]] Time | [0] Custom | [1-5] Weather | [F1-F4] Ocean | [6-9] Perf | [H] HUD"
+			"Controls: [Tab] GUI Panel | [Space] Play/Pause | [[ / ]] Time | [0] Custom | [1-5] Weather | [H] HUD"
 		) % [
 			fps,
 			frame_time_ms,

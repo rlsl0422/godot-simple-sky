@@ -11,6 +11,7 @@
 [ext_resource type="Shader" uid="uid://ulxcx4i3ob1m" path="res://shaders/ocean_surface.gdshader" id="9_v85ea"]
 [ext_resource type="Texture2D" path="res://assets/noises/ocean_wave_normal.res" id="10_n1aei"]
 [ext_resource type="Shader" uid="uid://bj7fkdm4efmsx" path="res://shaders/underwater_post.gdshader" id="11_37ejw"]
+[ext_resource type="Script" path="res://scripts/tuning_gui.gd" id="12_tuning_gui"]
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_sky"]
 shader = ExtResource("1_shader")
@@ -186,6 +187,17 @@ theme_override_constants/shadow_offset_x = 2
 theme_override_constants/shadow_offset_y = 2
 theme_override_font_sizes/font_size = 16
 text = "Loading Atmosphere & Clouds..."
+
+[node name="TuningGUI" type="Control" parent="CanvasLayer" unique_id=1894721980 node_paths=PackedStringArray("controller")]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+script = ExtResource("12_tuning_gui")
+controller = NodePath("../../AtmosphereCloudController")
 
 [node name="BenchmarkHarness" type="Node" parent="." unique_id=2036036595 node_paths=PackedStringArray("controller", "camera", "overlay_label")]
 script = ExtResource("4_benchmark")

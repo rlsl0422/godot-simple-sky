@@ -92,6 +92,8 @@ Measured on **NVIDIA GeForce MX450 (2GB VRAM, Entry-level Laptop GPU)** in 1080p
 
 | Key / Mouse | Action |
 | :--- | :--- |
+| **[Tab]** | **Toggle Interactive Tuning GUI Slider Panel (On/Off)** |
+| **[Left Click & Drag]** | Adjust Sliders & Controls in GUI Panel |
 | **[Right Mouse Drag]** | 360° Free Look Rotation |
 | **[W / A / S / D]** | Free Flight Movement |
 | **[Q / E]** | Descend / Ascend (Vertical Movement) |
@@ -105,7 +107,7 @@ Measured on **NVIDIA GeForce MX450 (2GB VRAM, Entry-level Laptop GPU)** in 1080p
 | **[ 1 ~ 5 ]** | Switch Weather Preset (`1: Clear Sky`, `2: Fair Cumulus`, `3: Golden Hour`, `4: Overcast`, `5: Storm`) |
 | **[ F1 ~ F4 ]** | Switch Ocean Preset (`F1: Calm Waters`, `F2: Gentle Breeze`, `F3: Open Sea Swell`, `F4: Rough Ocean`) |
 | **[ 6 ~ 9 ]** | Switch Performance Mode (`6: Low`, `7: Medium`, `8: High`, `9: Ultra`) |
-| **[ H ]** | Toggle HUD Overlay Display |
+| **[ H ]** | Toggle HUD Statistics Overlay |
 | **[ P ]** | Capture High-Res Screenshot to `res://screenshots/` |
 
 ---
