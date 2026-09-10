@@ -56,17 +56,38 @@ func _ready() -> void:
 	if not DirAccess.dir_exists_absolute("res://screenshots"):
 		DirAccess.make_dir_absolute("res://screenshots")
 
+func _input(event: InputEvent) -> void:
+	if event is InputEventKey and event.pressed and not event.echo:
+		if event.keycode == KEY_H:
+			if overlay_label:
+				overlay_label.visible = !overlay_label.visible
+
 func _process(delta: float) -> void:
 	var fps = Engine.get_frames_per_second()
 	var frame_time_ms = delta * 1000.0
 	
-	if overlay_label and controller:
-		overlay_label.text = "FPS: %d (%.2f ms) | Preset: %s | Mode: %s | Time: %.1fh\n[1-5] Weather | [F1-F4] Ocean Presets | [6-9] Perf | [WASD/QE] Move | [Shift] Boost" % [
+	if overlay_label and controller and overlay_label.visible:
+		var time_hours = int(controller.time_of_day)
+		var time_mins = int(fposmod(controller.time_of_day * 60.0, 60.0))
+		var anim_str = "PLAYING" if controller.animate_time else "PAUSED"
+		overlay_label.text = (
+			"FPS: %d (%.2f ms) | Preset: %s | Perf: %s | Time: %02d:%02d (%.2fh) [%s]\n" +
+			"Coverage: %.2f ([-/+]) | Density: %.2f ([</>]) | Scale: %.2f ([;/'\"]) | Base: %.0fm, Thk: %.0fm\n" +
+			"Controls: [Space] Play/Pause | [[ / ]] Time | [0] Custom | [1-5] Weather | [F1-F4] Ocean | [6-9] Perf | [H] HUD"
+		) % [
 			fps,
 			frame_time_ms,
 			CloudController.WeatherPreset.keys()[controller.weather_preset],
 			CloudController.PerformanceMode.keys()[controller.performance_mode],
-			controller.time_of_day
+			time_hours,
+			time_mins,
+			controller.time_of_day,
+			anim_str,
+			controller.cloud_coverage,
+			controller.cloud_density,
+			controller.cloud_scale,
+			controller.cloud_bottom_altitude,
+			controller.cloud_thickness
 		]
 	
 	if _is_time_test:

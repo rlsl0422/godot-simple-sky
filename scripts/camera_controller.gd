@@ -38,39 +38,71 @@ func _input(event: InputEvent) -> void:
 		rotation = Vector3(_pitch, _yaw, 0.0)
 		
 	# Hotkeys for Presets & Testing
-	if event is InputEventKey and event.pressed and not event.echo:
+	if event is InputEventKey and event.pressed:
 		if controller_node:
 			match event.keycode:
+				KEY_0:
+					if not event.echo:
+						controller_node.weather_preset = CloudController.WeatherPreset.CUSTOM
 				KEY_1:
-					controller_node.weather_preset = CloudController.WeatherPreset.CLEAR_SKY
+					if not event.echo:
+						controller_node.weather_preset = CloudController.WeatherPreset.CLEAR_SKY
 				KEY_2:
-					controller_node.weather_preset = CloudController.WeatherPreset.FAIR_CUMULUS
+					if not event.echo:
+						controller_node.weather_preset = CloudController.WeatherPreset.FAIR_CUMULUS
 				KEY_3:
-					controller_node.weather_preset = CloudController.WeatherPreset.GOLDEN_HOUR
+					if not event.echo:
+						controller_node.weather_preset = CloudController.WeatherPreset.GOLDEN_HOUR
 				KEY_4:
-					controller_node.weather_preset = CloudController.WeatherPreset.DRAMATIC_OVERCAST
+					if not event.echo:
+						controller_node.weather_preset = CloudController.WeatherPreset.DRAMATIC_OVERCAST
 				KEY_5:
-					controller_node.weather_preset = CloudController.WeatherPreset.STORMY_EVENING
+					if not event.echo:
+						controller_node.weather_preset = CloudController.WeatherPreset.STORMY_EVENING
 				KEY_6:
-					controller_node.performance_mode = CloudController.PerformanceMode.LOW
+					if not event.echo:
+						controller_node.performance_mode = CloudController.PerformanceMode.LOW
 				KEY_7:
-					controller_node.performance_mode = CloudController.PerformanceMode.MEDIUM
+					if not event.echo:
+						controller_node.performance_mode = CloudController.PerformanceMode.MEDIUM
 				KEY_8:
-					controller_node.performance_mode = CloudController.PerformanceMode.HIGH
+					if not event.echo:
+						controller_node.performance_mode = CloudController.PerformanceMode.HIGH
 				KEY_9:
-					controller_node.performance_mode = CloudController.PerformanceMode.ULTRA
+					if not event.echo:
+						controller_node.performance_mode = CloudController.PerformanceMode.ULTRA
 				KEY_SPACE:
-					controller_node.animate_time = !controller_node.animate_time
+					if not event.echo:
+						controller_node.animate_time = !controller_node.animate_time
+				KEY_BRACKETLEFT:
+					var step = 0.1 if Input.is_key_pressed(KEY_SHIFT) else 0.5
+					controller_node.time_of_day = fposmod(controller_node.time_of_day - step, 24.0)
+				KEY_BRACKETRIGHT:
+					var step = 0.1 if Input.is_key_pressed(KEY_SHIFT) else 0.5
+					controller_node.time_of_day = fposmod(controller_node.time_of_day + step, 24.0)
+				KEY_MINUS:
+					controller_node.cloud_coverage = clampf(controller_node.cloud_coverage - 0.02, 0.0, 1.0)
+				KEY_EQUAL:
+					controller_node.cloud_coverage = clampf(controller_node.cloud_coverage + 0.02, 0.0, 1.0)
+				KEY_COMMA:
+					controller_node.cloud_density = clampf(controller_node.cloud_density - 0.05, 0.05, 3.0)
+				KEY_PERIOD:
+					controller_node.cloud_density = clampf(controller_node.cloud_density + 0.05, 0.05, 3.0)
+				KEY_SEMICOLON:
+					controller_node.cloud_scale = clampf(controller_node.cloud_scale - 0.01, 0.05, 1.0)
+				KEY_APOSTROPHE:
+					controller_node.cloud_scale = clampf(controller_node.cloud_scale + 0.01, 0.05, 1.0)
 				KEY_P:
-					_capture_screenshot()
+					if not event.echo:
+						_capture_screenshot()
 				KEY_F1:
-					if ocean_controller: ocean_controller.ocean_preset = OceanControllerClass.OceanPreset.CALM_LAKE
+					if ocean_controller and not event.echo: ocean_controller.ocean_preset = OceanControllerClass.OceanPreset.CALM_LAKE
 				KEY_F2:
-					if ocean_controller: ocean_controller.ocean_preset = OceanControllerClass.OceanPreset.GENTLE_OCEAN
+					if ocean_controller and not event.echo: ocean_controller.ocean_preset = OceanControllerClass.OceanPreset.GENTLE_OCEAN
 				KEY_F3:
-					if ocean_controller: ocean_controller.ocean_preset = OceanControllerClass.OceanPreset.ROUGH_SEAS
+					if ocean_controller and not event.echo: ocean_controller.ocean_preset = OceanControllerClass.OceanPreset.ROUGH_SEAS
 				KEY_F4:
-					if ocean_controller: ocean_controller.ocean_preset = OceanControllerClass.OceanPreset.STORMY_TEMPEST
+					if ocean_controller and not event.echo: ocean_controller.ocean_preset = OceanControllerClass.OceanPreset.STORMY_TEMPEST
 
 func _process(delta: float) -> void:
 	# Movement

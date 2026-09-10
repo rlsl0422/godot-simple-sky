@@ -32,13 +32,21 @@ enum WeatherPreset {
 @export var sun_light: DirectionalLight3D
 
 # ==========================================
+var _is_applying_preset: bool = false
+
+func _mark_custom_preset() -> void:
+	if not _is_applying_preset and weather_preset != WeatherPreset.CUSTOM:
+		weather_preset = WeatherPreset.CUSTOM
+
+# ==========================================
 # EXPORTS: PRESETS & PERFORMANCE
 # ==========================================
 @export_group("Presets & Performance")
-@export var weather_preset: WeatherPreset = WeatherPreset.FAIR_CUMULUS:
+@export var weather_preset: WeatherPreset = WeatherPreset.CUSTOM:
 	set(val):
 		weather_preset = val
-		_apply_weather_preset(val)
+		if val != WeatherPreset.CUSTOM and not _is_applying_preset:
+			_apply_weather_preset(val)
 
 @export var performance_mode: PerformanceMode = PerformanceMode.MEDIUM:
 	set(val):
@@ -52,21 +60,25 @@ enum WeatherPreset {
 @export_range(0.0, 24.0, 0.05) var time_of_day: float = 14.5: ## 0.0-24.0 hours (e.g. 12 = Noon, 18 = Sunset)
 	set(val):
 		time_of_day = val
+		_mark_custom_preset()
 		_update_sun_and_atmosphere()
 
 @export_range(-90.0, 90.0, 1.0) var sun_latitude: float = 35.0: ## Solar path declination angle
 	set(val):
 		sun_latitude = val
+		_mark_custom_preset()
 		_update_sun_and_atmosphere()
 
 @export_range(0.0, 50.0, 0.5) var sun_intensity: float = 24.0:
 	set(val):
 		sun_intensity = val
+		_mark_custom_preset()
 		_update_material_uniform("sun_intensity", val)
 
 @export var sun_color: Color = Color(1.0, 0.96, 0.90):
 	set(val):
 		sun_color = val
+		_mark_custom_preset()
 		_update_material_uniform("sun_color", Vector3(val.r, val.g, val.b))
 
 # ==========================================
@@ -81,51 +93,62 @@ enum WeatherPreset {
 @export_range(0.0, 1.0, 0.01) var cloud_coverage: float = 0.43: ## Overall cloud amount (0 = Clear, 1 = Dense cover)
 	set(val):
 		cloud_coverage = val
+		_mark_custom_preset()
 		_update_material_uniform("cloud_coverage", val)
 
 @export_range(0.1, 4.0, 0.05) var cloud_density: float = 0.65: ## Cloud body thickness and opacity
 	set(val):
 		cloud_density = val
+		_mark_custom_preset()
 		_update_material_uniform("cloud_density_multiplier", val)
 
 @export_range(500.0, 4000.0, 50.0) var cloud_bottom_altitude: float = 1600.0: ## Cloud base altitude in meters
 	set(val):
 		cloud_bottom_altitude = val
+		_mark_custom_preset()
 		_update_material_uniform("cloud_bottom_altitude", val)
+		_update_material_uniform("cloud_top_altitude", val + cloud_thickness)
 
 @export_range(500.0, 6000.0, 50.0) var cloud_thickness: float = 2600.0: ## Height from base to cloud top
 	set(val):
 		cloud_thickness = val
+		_mark_custom_preset()
 		_update_material_uniform("cloud_top_altitude", cloud_bottom_altitude + val)
 
 @export_range(0.0, 1.0, 0.01) var detail_fluffiness: float = 0.27: ## Micro edge erosion and fluffiness
 	set(val):
 		detail_fluffiness = val
+		_mark_custom_preset()
 		_update_material_uniform("detail_strength", val)
 
 @export_range(0.05, 1.0, 0.01) var cloud_scale: float = 0.29: ## Base spatial scale in 1/km
 	set(val):
 		cloud_scale = val
+		_mark_custom_preset()
 		_update_material_uniform("cloud_scale", val)
 
 @export_range(100.0, 2000.0, 10.0) var cloud_curvature_radius_km: float = 150.0: ## Effective planetary curvature for clouds
 	set(val):
 		cloud_curvature_radius_km = val
+		_mark_custom_preset()
 		_update_material_uniform("cloud_curvature_radius_km", val)
 
 @export_range(0.0, 1.0, 0.05) var satellite_cloud_amount: float = 0.45: ## Clustered baby clouds around main cloud mass
 	set(val):
 		satellite_cloud_amount = val
+		_mark_custom_preset()
 		_update_material_uniform("satellite_cloud_amount", val)
 
 @export_range(0.0, 1.0, 0.05) var zenith_sky_clearance: float = 0.55: ## Horizon vs overhead open blue sky balance
 	set(val):
 		zenith_sky_clearance = val
+		_mark_custom_preset()
 		_update_material_uniform("zenith_sky_clearance", val)
 
 @export_range(0.0, 5.0, 0.1) var silver_lining: float = 2.4: ## Edge rim glow when looking toward the sun
 	set(val):
 		silver_lining = val
+		_mark_custom_preset()
 		_update_material_uniform("silver_lining_intensity", val)
 
 # ==========================================
@@ -166,7 +189,7 @@ enum WeatherPreset {
 		wind_heading_degrees = val
 		_update_wind()
 
-@export var animate_time: bool = true
+@export var animate_time: bool = false ## If true, time_of_day automatically advances
 @export_range(0.0, 10.0, 0.1) var time_progression_speed: float = 0.05 ## Hours per real-time minute
 
 # Internal references & dynamic lighting state
@@ -179,7 +202,10 @@ var current_sun_energy: float = 24.0
 func _ready() -> void:
 	_setup_materials_and_textures()
 	_apply_performance_mode(performance_mode)
-	_apply_weather_preset(weather_preset)
+	# CRITICAL: Do NOT overwrite user's saved inspector parameters with preset values in _ready()!
+	# All inspector parameters configured by the user in the editor are already loaded from .tscn
+	# and must be preserved exactly as configured.
+	_sync_all_to_shader()
 	_update_material_uniform("tonemap_mode", tonemap_mode)
 	_update_material_uniform("exposure", exposure)
 	_update_material_uniform("white_point", white_point)
@@ -191,7 +217,9 @@ func _process(delta: float) -> void:
 	if animate_time and not Engine.is_editor_hint():
 		# Time progression: 1 hour in (60 / time_progression_speed) seconds
 		var hours_per_sec = time_progression_speed / 60.0
-		time_of_day = fmod(time_of_day + hours_per_sec * delta, 24.0)
+		_is_applying_preset = true
+		time_of_day = fposmod(time_of_day + hours_per_sec * delta, 24.0)
+		_is_applying_preset = false
 	
 	if _sky_material:
 		if animate_time and not Engine.is_editor_hint():
@@ -318,6 +346,9 @@ func _apply_performance_mode(mode: PerformanceMode) -> void:
 			_update_material_uniform("detail_lod_distance_km", 24.0)
 
 func _apply_weather_preset(preset: WeatherPreset) -> void:
+	if preset == WeatherPreset.CUSTOM:
+		return
+	_is_applying_preset = true
 	match preset:
 		WeatherPreset.CLEAR_SKY:
 			cloud_coverage = 0.12
@@ -358,7 +389,7 @@ func _apply_weather_preset(preset: WeatherPreset) -> void:
 			time_of_day = 19.0
 		WeatherPreset.CUSTOM:
 			pass
-			
+	_is_applying_preset = false
 	_sync_all_to_shader()
 
 func _sync_all_to_shader() -> void:

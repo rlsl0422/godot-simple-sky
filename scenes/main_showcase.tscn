@@ -14,7 +14,7 @@
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_sky"]
 shader = ExtResource("1_shader")
-shader_parameter/sun_direction = Vector3(-0.90814316, 0.40951103, -0.087044254)
+shader_parameter/sun_direction = Vector3(0.2461533, 0.9480509, -0.20151444)
 shader_parameter/sun_color = Color(1, 0.95, 0.88, 1)
 shader_parameter/sun_intensity = 10.0
 shader_parameter/sun_disk_size = 0.015
@@ -28,17 +28,17 @@ shader_parameter/clouds_enabled = true
 shader_parameter/base_noise_tex = ExtResource("2_owdof")
 shader_parameter/detail_noise_tex = ExtResource("3_fkctd")
 shader_parameter/weather_tex = ExtResource("4_ipc0k")
-shader_parameter/cloud_coverage = 0.43
-shader_parameter/cloud_density_multiplier = 0.65
-shader_parameter/cloud_bottom_altitude = 1600.0
-shader_parameter/cloud_top_altitude = 4200.0
-shader_parameter/cloud_scale = 0.29
+shader_parameter/cloud_coverage = 0.36
+shader_parameter/cloud_density_multiplier = 0.7
+shader_parameter/cloud_bottom_altitude = 1000.0
+shader_parameter/cloud_top_altitude = 7400.0
+shader_parameter/cloud_scale = 0.28
 shader_parameter/detail_scale = 3.5
-shader_parameter/detail_strength = 0.27
+shader_parameter/detail_strength = 0.26
 shader_parameter/weather_scale = 0.045
-shader_parameter/cloud_curvature_radius_km = 150.0
-shader_parameter/satellite_cloud_amount = 0.45
-shader_parameter/zenith_sky_clearance = 0.55
+shader_parameter/cloud_curvature_radius_km = 100.0
+shader_parameter/satellite_cloud_amount = 0.8
+shader_parameter/zenith_sky_clearance = 0.3
 shader_parameter/wind_direction = Vector3(0.8660254, 0, 0.5)
 shader_parameter/wind_speed = 6.944444444444445
 shader_parameter/custom_time = 353.461
@@ -93,14 +93,14 @@ shader_parameter/crest_foam_intensity = 2.0
 shader_parameter/contact_foam_distance = 0.25
 shader_parameter/caustics_strength = 0.5
 shader_parameter/caustics_scale = 1.4
-shader_parameter/sun_direction = Vector3(-0.90814316, 0.40951103, -0.087044254)
+shader_parameter/sun_direction = Vector3(0.2461533, 0.9480509, -0.20151444)
 shader_parameter/sun_color = Color(1, 0.95, 0.88, 1)
 shader_parameter/sun_intensity = 10.0
 shader_parameter/sky_ambient_color = Color(0.035, 0.12, 0.35, 1)
 shader_parameter/sky_horizon_color = Color(0.14, 0.34, 0.58, 1)
 shader_parameter/fade_inner_radius = 1400.0
 shader_parameter/fade_outer_radius = 2400.0
-shader_parameter/custom_time = 62.882
+shader_parameter/custom_time = 311.333
 shader_parameter/tonemap_mode = 1
 shader_parameter/exposure = 1.0
 shader_parameter/white_point = 6.0
@@ -130,10 +130,10 @@ shader_parameter/wave_length = 55.0
 shader_parameter/wave_speed = 1.8
 shader_parameter/wave_steepness = 0.72
 shader_parameter/primary_wind_dir = Vector2(0.9063078, 0.42261827)
-shader_parameter/sun_direction = Vector3(-0.90814316, 0.40951103, -0.087044254)
+shader_parameter/sun_direction = Vector3(0.2461533, 0.9480509, -0.20151444)
 shader_parameter/sun_color = Color(1, 0.98, 0.92, 1)
 shader_parameter/sun_intensity = 10.0
-shader_parameter/custom_time = 62.882
+shader_parameter/custom_time = 311.333
 
 [sub_resource type="QuadMesh" id="QuadMesh_n02pc"]
 size = Vector2(2, 2)
@@ -144,7 +144,7 @@ size = Vector2(2, 2)
 environment = SubResource("Environment_main")
 
 [node name="DirectionalLight3D" type="DirectionalLight3D" parent="." unique_id=1628056038]
-transform = Transform3D(-0.0954113, 0.4076429, -0.9081433, 0, 0.9123054, 0.4095111, 0.9954379, 0.039071992, -0.08704423, 0, 0, 0)
+transform = Transform3D(-0.63345665, -0.73358124, 0.24615328, 0, 0.31811872, 0.94805104, -0.7737781, 0.60054934, -0.20151441, 0, 0, 0)
 light_color = Color(1, 0.96, 0.9, 1)
 shadow_enabled = true
 
@@ -160,9 +160,18 @@ ocean_controller = NodePath("../OceanController")
 script = ExtResource("3_controller")
 world_environment = NodePath("../WorldEnvironment")
 sun_light = NodePath("../DirectionalLight3D")
-time_of_day = 7.65
+time_of_day = 12.95
 sun_latitude = 12.0
 sun_intensity = 10.0
+cloud_coverage = 0.36
+cloud_density = 0.7
+cloud_bottom_altitude = 1000.0
+cloud_thickness = 6000.0
+detail_fluffiness = 0.26
+cloud_scale = 0.28
+cloud_curvature_radius_km = 100.0
+satellite_cloud_amount = 0.8
+zenith_sky_clearance = 0.3
 sun_corona_intensity = 0.05
 
 [node name="CanvasLayer" type="CanvasLayer" parent="." unique_id=595155925]
@@ -170,8 +179,8 @@ sun_corona_intensity = 0.05
 [node name="StatsLabel" type="Label" parent="CanvasLayer" unique_id=1343830127]
 offset_left = 20.0
 offset_top = 20.0
-offset_right = 650.0
-offset_bottom = 80.0
+offset_right = 1050.0
+offset_bottom = 95.0
 theme_override_colors/font_shadow_color = Color(0, 0, 0, 0.8)
 theme_override_constants/shadow_offset_x = 2
 theme_override_constants/shadow_offset_y = 2
@@ -210,13 +219,12 @@ godray_intensity = 1.0
 godray_sharpness = 8.5
 
 [node name="OceanSurfaceMesh" type="MeshInstance3D" parent="OceanController" unique_id=625027918]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -23.4375, 0, 0)
 material_override = SubResource("ShaderMaterial_5ptkg")
 cast_shadow = 0
 mesh = SubResource("PlaneMesh_k8c2n")
 
 [node name="UnderwaterPostQuad" type="MeshInstance3D" parent="OceanController" unique_id=588069186]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -7.344616, 4.1671486, 9.164551)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4.9831257, 2.2230353, 6.947807)
 material_override = SubResource("ShaderMaterial_vmc2o")
 cast_shadow = 0
 extra_cull_margin = 16384.0

@@ -92,13 +92,21 @@ Measured on **NVIDIA GeForce MX450 (2GB VRAM, Entry-level Laptop GPU)** in 1080p
 
 | Key / Mouse | Action |
 | :--- | :--- |
-| **[1 ~ 5]** | Switch Weather Preset (`1: Clear Sky`, `2: Fair Cumulus`, `3: Golden Hour`, `4: Overcast`, `5: Storm`) |
-| **[F1 ~ F4]** | Switch Ocean Preset (`F1: Calm Waters`, `F2: Gentle Breeze`, `F3: Open Sea Swell`, `F4: Rough Ocean`) |
-| **[6 ~ 9]** | Switch Performance Mode (`6: Low`, `7: Medium`, `8: High`, `9: Ultra`) |
 | **[Right Mouse Drag]** | 360° Free Look Rotation |
 | **[W / A / S / D]** | Free Flight Movement |
-| **[Space / Ctrl]** | Ascend / Descend |
+| **[Q / E]** | Descend / Ascend (Vertical Movement) |
 | **[Shift]** | Boost Flight Speed |
+| **[Space]** | Toggle Time-of-Day Progression (Play / Pause) |
+| **[ [ / ] ]** | Adjust Time of Day (`[` -0.5h, `]` +0.5h, hold Shift for ±0.1h fine step) |
+| **[ - / = ]** | Adjust Cloud Coverage (`-` -0.02, `+` +0.02) |
+| **[ , / . ]** | Adjust Cloud Density (`,` -0.05, `.` +0.05) |
+| **[ ; / ' ]** | Adjust Cloud Scale (`;` -0.01, `'` +0.01) |
+| **[ 0 ]** | Switch to Custom Mode (Preserve Editor Inspector Parameters) |
+| **[ 1 ~ 5 ]** | Switch Weather Preset (`1: Clear Sky`, `2: Fair Cumulus`, `3: Golden Hour`, `4: Overcast`, `5: Storm`) |
+| **[ F1 ~ F4 ]** | Switch Ocean Preset (`F1: Calm Waters`, `F2: Gentle Breeze`, `F3: Open Sea Swell`, `F4: Rough Ocean`) |
+| **[ 6 ~ 9 ]** | Switch Performance Mode (`6: Low`, `7: Medium`, `8: High`, `9: Ultra`) |
+| **[ H ]** | Toggle HUD Overlay Display |
+| **[ P ]** | Capture High-Res Screenshot to `res://screenshots/` |
 
 ---
 
