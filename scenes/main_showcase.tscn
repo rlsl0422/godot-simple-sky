@@ -99,8 +99,8 @@ shader_parameter/sun_color = Color(1, 0.95, 0.88, 1)
 shader_parameter/sun_intensity = 10.0
 shader_parameter/sky_ambient_color = Color(0.035, 0.12, 0.35, 1)
 shader_parameter/sky_horizon_color = Color(0.14, 0.34, 0.58, 1)
-shader_parameter/fade_inner_radius = 1400.0
-shader_parameter/fade_outer_radius = 2400.0
+shader_parameter/fade_inner_radius = 2800.0
+shader_parameter/fade_outer_radius = 3800.0
 shader_parameter/custom_time = 311.333
 shader_parameter/tonemap_mode = 1
 shader_parameter/exposure = 1.0
@@ -108,7 +108,7 @@ shader_parameter/white_point = 6.0
 shader_parameter/wave_normal_tex = ExtResource("10_n1aei")
 
 [sub_resource type="PlaneMesh" id="PlaneMesh_k8c2n"]
-size = Vector2(6000, 6000)
+size = Vector2(8000, 8000)
 subdivide_width = 256
 subdivide_depth = 256
 
@@ -242,7 +242,3 @@ cast_shadow = 0
 extra_cull_margin = 16384.0
 custom_aabb = AABB(-100000, -100000, -100000, 200000, 200000, 200000)
 mesh = SubResource("QuadMesh_n02pc")
-
-[node name="CSGBox3D" type="CSGBox3D" parent="." unique_id=1412476091]
-transform = Transform3D(0.9235375, 0.36805552, 0.10776677, -0.3835082, 0.8863254, 0.25951636, 0, -0.28100252, 0.959707, 0.6406925, -0.93969715, -2.5693097)
-size = Vector3(5.7094727, 5.2817383, 8.116272)

@@ -61,8 +61,8 @@ uniform vec3 sky_horizon_color : source_color = vec3(0.140, 0.340, 0.580);
 // UNIFORMS: HORIZON & DISTANCE FADE
 // ==========================================
 group_uniforms Horizon_Blend;
-uniform float fade_inner_radius : hint_range(500.0, 5000.0, 50.0) = 1400.0;
-uniform float fade_outer_radius : hint_range(800.0, 6000.0, 50.0) = 2400.0;
+uniform float fade_inner_radius : hint_range(500.0, 5000.0, 50.0) = 2800.0;
+uniform float fade_outer_radius : hint_range(800.0, 6000.0, 50.0) = 3800.0;
 uniform float custom_time = 0.0;
 
 // ==========================================
@@ -531,12 +531,11 @@ void fragment() {
 	float to_distant = clamp(max(dist_blend, alt_blend), 0.0, 1.0);
 	surface_color = mix(surface_color, distant_ocean_color, to_distant);
 
-	// Aerial Perspective / Horizon Blending:
-	// Only applies when looking towards the distant planetary horizon at grazing angles (V.y near 0).
-	// Strictly disabled when looking downwards at the ocean below, completely banishing the bright circular donut halo!
+	// Aerial Perspective / Distance Haze (calibrated exponential extinction matching atmosphere_clouds.gdshader)
+	float dist_km = length(cam_pos - v_world_pos) * 0.001;
 	float grazing_factor = clamp(1.0 - V.y * 3.5, 0.0, 1.0);
-	float horizon_haze = smoothstep(fade_inner_radius * 0.70, fade_outer_radius, v_cam_dist) * grazing_factor;
-	surface_color = mix(surface_color, sky_horizon_color, horizon_haze * 0.65);
+	float mesh_haze = clamp(1.0 - exp(-dist_km * 0.018), 0.0, 1.0) * grazing_factor;
+	surface_color = mix(surface_color, sky_horizon_color, mesh_haze);
 
 	// Photographic Tone Mapping (ACES Film matching atmosphere_clouds.gdshader)
 	surface_color = apply_tonemapping(surface_color, exposure, tonemap_mode, white_point);

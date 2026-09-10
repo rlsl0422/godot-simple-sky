@@ -196,19 +196,19 @@ enum OceanPreset {
 # ==========================================
 @export_group("Horizon & Distance Fade")
 ## Inner radius in meters where wave displacement starts fading to ensure seamless curvature blending with the horizon.
-@export_range(500.0, 4000.0, 50.0) var fade_inner_radius: float = 1400.0:
+@export_range(500.0, 5000.0, 50.0) var fade_inner_radius: float = 2800.0:
 	set(val):
 		fade_inner_radius = val
 		_update_ocean_uniform("fade_inner_radius", val)
 
 ## Outer radius in meters where the ocean surface mesh smoothly dissipates to transparent, preventing visible grid boundaries.
-@export_range(800.0, 5000.0, 50.0) var fade_outer_radius: float = 2400.0:
+@export_range(800.0, 6000.0, 50.0) var fade_outer_radius: float = 3800.0:
 	set(val):
 		fade_outer_radius = val
 		_update_ocean_uniform("fade_outer_radius", val)
 
 # Internal Grid Configuration
-const GRID_SIZE: float = 6000.0
+const GRID_SIZE: float = 8000.0
 const GRID_SUBDIVISIONS: int = 256
 var _ocean_mat: ShaderMaterial
 var _underwater_mat: ShaderMaterial
@@ -385,6 +385,8 @@ func _sync_environment_from_atmosphere() -> void:
 
 	if atmosphere_controller._sky_material:
 		atmosphere_controller._sky_material.set_shader_parameter("deep_water_color", Vector3(deep_water_color.r, deep_water_color.g, deep_water_color.b))
+		atmosphere_controller._sky_material.set_shader_parameter("sky_ambient_color", Vector3(sky_amb.r, sky_amb.g, sky_amb.b))
+		atmosphere_controller._sky_material.set_shader_parameter("sky_horizon_color", Vector3(sky_hor.r, sky_hor.g, sky_hor.b))
 
 	if _underwater_mat:
 		_underwater_mat.set_shader_parameter("sun_direction", sun_dir)
