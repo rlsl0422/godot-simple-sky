@@ -181,9 +181,14 @@ void evaluate_swells_vertex(vec2 pos, float time_val, out vec3 displacement, out
 		total_fold += q * wa * max(cos_p, 0.0);
 	}
 
+	displacement = disp;
 	vec3 c = cross(binormal, tangent);
+	if (c.y < 0.15) {
+		c.y = 0.15;
+	}
 	float c_len = length(c);
 	normal = c_len > 0.0001 ? c / c_len : vec3(0.0, 1.0, 0.0);
+	crest_h = total_h;
 	crest_fold = total_fold;
 }
 
@@ -241,6 +246,9 @@ vec3 evaluate_swell_normal(vec2 pos, float time_val) {
 	}
 
 	vec3 c = cross(binormal, tangent);
+	if (c.y < 0.15) {
+		c.y = 0.15;
+	}
 	float c_len = length(c);
 	return c_len > 0.0001 ? c / c_len : vec3(0.0, 1.0, 0.0);
 }
@@ -300,13 +308,13 @@ void vertex() {
 
 	// Smooth vertex wave fade towards boundary to seamlessly match flat planetary horizon
 	float dist_wave_fade = smoothstep(fade_outer_radius, fade_inner_radius, cam_dist);
-	// Altitude wave fade: smoothly flatten 3D vertex wave displacement as camera ascends into the sky (30m - 1000m)
-	float altitude_wave_fade = 1.0 - smoothstep(30.0, 1000.0, alt);
+	// Altitude wave fade: smoothly flatten 3D vertex wave displacement as camera ascends into the sky (80m - 1500m)
+	float altitude_wave_fade = 1.0 - smoothstep(80.0, 1500.0, alt);
 
-	vec3 disp;
-	vec3 norm;
-	float crest_h;
-	float crest_fold;
+	vec3 disp = vec3(0.0);
+	vec3 norm = vec3(0.0, 1.0, 0.0);
+	float crest_h = 0.0;
+	float crest_fold = 0.0;
 	evaluate_swells_vertex(world_v.xz, time_val, disp, norm, crest_h, crest_fold);
 
 	disp *= (dist_wave_fade * altitude_wave_fade);
@@ -356,7 +364,7 @@ void fragment() {
 	// Distance & altitude detail attenuation
 	float dist_3d = length(cam_pos - v_world_pos);
 	float detail_fade = clamp(1.0 - dist_3d / 900.0, 0.0, 1.0);
-	float alt_detail_fade = 1.0 - smoothstep(40.0, 800.0, v_cam_alt);
+	float alt_detail_fade = 1.0 - smoothstep(120.0, 1500.0, v_cam_alt);
 	detail_fade *= alt_detail_fade;
 	float detail_curve = detail_fade * detail_fade * (3.0 - 2.0 * detail_fade);
 
@@ -364,11 +372,21 @@ void fragment() {
 	vec2 ripple_slope = (n1.xy * 0.50 + n2.xy * 0.35) * (detail_curve * 0.50);
 
 	// Reoriented Normal Mapping (RNM) onto analytical base swell normal:
-	// Constructs tangent frame on base_norm to avoid cross-hatch planar projection distortion
-	vec3 t_tangent = normalize(cross(vec3(0.0, 1.0, 0.0), base_norm));
-	if (dot(t_tangent, t_tangent) < 0.001) t_tangent = vec3(1.0, 0.0, 0.0);
+	// Safe tangent frame construction without division by zero or NaN propagation
+	vec3 cross_t = cross(vec3(0.0, 1.0, 0.0), base_norm);
+	float len_t = length(cross_t);
+	vec3 t_tangent = len_t > 0.0001 ? cross_t / len_t : vec3(1.0, 0.0, 0.0);
 	vec3 t_binormal = cross(base_norm, t_tangent);
-	vec3 N = normalize(base_norm + t_tangent * ripple_slope.x + t_binormal * ripple_slope.y);
+	float len_b = length(t_binormal);
+	t_binormal = len_b > 0.0001 ? t_binormal / len_b : vec3(0.0, 0.0, 1.0);
+
+	vec3 unnorm_N = base_norm + t_tangent * ripple_slope.x + t_binormal * ripple_slope.y;
+	float len_N = length(unnorm_N);
+	vec3 N = len_N > 0.0001 ? unnorm_N / len_N : vec3(0.0, 1.0, 0.0);
+	if (N.y < 0.12) {
+		N.y = 0.12;
+		N = normalize(N);
+	}
 
 	// Distance normal flattening towards outer radius to match flat planetary sphere
 	N = normalize(mix(vec3(0.0, 1.0, 0.0), N, circular_alpha));
@@ -428,7 +446,7 @@ void fragment() {
 
 	// Procedural Cellular Sea Foam (100% free of polygon confetti!)
 	float total_foam = evaluate_organic_foam(v_world_pos.xz, time_val, whitecap_crest_mask, water_depth, scene_world_pos.y, is_underwater);
-	float foam_alt_fade = 1.0 - smoothstep(30.0, 600.0, v_cam_alt);
+	float foam_alt_fade = 1.0 - smoothstep(100.0, 1500.0, v_cam_alt);
 	total_foam *= foam_alt_fade;
 
 	// Toksvig normal variance absorption:
@@ -517,7 +535,7 @@ void fragment() {
 	}
 
 	vec3 surface_color = mix(water_composite, sky_reflected, fresnel);
-	surface_color += sss_light * (1.0 - smoothstep(30.0, 600.0, v_cam_alt));
+	surface_color += sss_light * (1.0 - smoothstep(100.0, 1200.0, v_cam_alt));
 	surface_color += sun_specular_energy;
 	surface_color = mix(surface_color, foam_color, total_foam);
 
@@ -529,9 +547,9 @@ void fragment() {
 
 	// Seamless Blending between near-field PBR ocean and planetary distant ocean:
 	// 1. Radially: smoothly converges to distant ocean color before circular_alpha fade begins
-	float dist_blend = smoothstep(fade_inner_radius * 0.35, fade_outer_radius, v_cam_dist);
-	// 2. Vertically: smoothly converges to distant ocean color as camera ascends
-	float alt_blend = smoothstep(40.0, 1000.0, v_cam_alt);
+	float dist_blend = smoothstep(fade_inner_radius * 0.45, fade_outer_radius, v_cam_dist);
+	// 2. Vertically: smoothly converges to distant ocean color as camera ascends (smooth transition across 150m - 2500m)
+	float alt_blend = smoothstep(150.0, 2500.0, v_cam_alt);
 	float to_distant = clamp(max(dist_blend, alt_blend), 0.0, 1.0);
 	surface_color = mix(surface_color, distant_ocean_color, to_distant);
 
@@ -545,8 +563,8 @@ void fragment() {
 	surface_color = apply_tonemapping(surface_color, exposure, tonemap_mode, white_point);
 
 	// High-Altitude Seamless Handoff:
-	// Above 1000m to 1800m altitude, the high-res mesh smoothly dissolves to yield to the infinite planetary sky shader ocean
-	float alt_mesh_alpha = 1.0 - smoothstep(1000.0, 1800.0, v_cam_alt);
+	// At extreme stratosphere altitude (>2500m), smoothly yield to infinite planetary sky shader ocean
+	float alt_mesh_alpha = 1.0 - smoothstep(2500.0, 4000.0, v_cam_alt);
 	float final_alpha = circular_alpha * alt_mesh_alpha;
 	if (final_alpha <= 0.001) {
 		discard;
