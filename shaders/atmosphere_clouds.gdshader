@@ -260,7 +260,7 @@ float sample_cloud_density(vec3 pos_km, float height_norm, vec2 wind_offset_km, 
 	float cluster_thresh = mix(0.58, 0.46, smoothstep(0.30, 0.46, cloud_coverage));
 	
 	// Overhead clearance: preserves open blue sky directly overhead while horizon clouds form monumental thunderheads
-	float dist_xz = length(pos_km.xz - camera_world_position.xz);
+	float dist_xz = length(pos_km.xz - camera_world_position.xz * 0.001);
 	float zenith_mod = mix(zenith_sky_clearance * 0.09, 0.0, smoothstep(2.0, 14.0, dist_xz));
 	float effective_thresh = cluster_thresh + zenith_mod;
 	
