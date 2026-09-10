@@ -109,8 +109,8 @@ shader_parameter/wave_normal_tex = ExtResource("10_n1aei")
 
 [sub_resource type="PlaneMesh" id="PlaneMesh_k8c2n"]
 size = Vector2(8000, 8000)
-subdivide_width = 256
-subdivide_depth = 256
+subdivide_width = 200
+subdivide_depth = 200
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_vmc2o"]
 render_priority = 0

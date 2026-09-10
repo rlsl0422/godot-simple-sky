@@ -1,5 +1,5 @@
 shader_type spatial;
-render_mode cull_back, depth_draw_opaque, unshaded, blend_mix;
+render_mode cull_disabled, depth_draw_opaque, unshaded, blend_mix;
 
 /*
  * State-of-the-Art Physically-Based Infinite Ocean Surface Shader
@@ -181,9 +181,9 @@ void evaluate_swells_vertex(vec2 pos, float time_val, out vec3 displacement, out
 		total_fold += q * wa * max(cos_p, 0.0);
 	}
 
-	displacement = disp;
-	normal = normalize(cross(binormal, tangent));
-	crest_h = total_h;
+	vec3 c = cross(binormal, tangent);
+	float c_len = length(c);
+	normal = c_len > 0.0001 ? c / c_len : vec3(0.0, 1.0, 0.0);
 	crest_fold = total_fold;
 }
 
@@ -240,7 +240,9 @@ vec3 evaluate_swell_normal(vec2 pos, float time_val) {
 		binormal.y -= m_dir.y * (wa * sin_p);
 	}
 
-	return normalize(cross(binormal, tangent));
+	vec3 c = cross(binormal, tangent);
+	float c_len = length(c);
+	return c_len > 0.0001 ? c / c_len : vec3(0.0, 1.0, 0.0);
 }
 
 // Gentle geometry caustics (only on solid underwater terrain/objects)
@@ -490,7 +492,9 @@ void fragment() {
 		vec3 refracted_scene = texture(screen_texture, ref_uv).rgb;
 
 		// Reconstruct geometric normal of submerged scene geometry using screen-space derivatives
-		vec3 sc_norm = normalize(cross(dFdy(scene_world_pos), dFdx(scene_world_pos)));
+		vec3 sc_cross = cross(dFdy(scene_world_pos), dFdx(scene_world_pos));
+		float sc_len = length(sc_cross);
+		vec3 sc_norm = sc_len > 0.0001 ? sc_cross / sc_len : vec3(0.0, 1.0, 0.0);
 		if (dot(sc_norm, V) < 0.0) {
 			sc_norm = -sc_norm;
 		}

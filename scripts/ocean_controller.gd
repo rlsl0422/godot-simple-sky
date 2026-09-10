@@ -209,7 +209,7 @@ enum OceanPreset {
 
 # Internal Grid Configuration
 const GRID_SIZE: float = 8000.0
-const GRID_SUBDIVISIONS: int = 256
+const GRID_SUBDIVISIONS: int = 200
 var _ocean_mat: ShaderMaterial
 var _underwater_mat: ShaderMaterial
 
@@ -279,7 +279,7 @@ func _init_ocean_mesh() -> void:
 		ocean_mesh_instance.owner = get_tree().edited_scene_root if Engine.is_editor_hint() else self
 
 	var plane_mesh = ocean_mesh_instance.mesh as PlaneMesh
-	if not plane_mesh or plane_mesh.size.x != GRID_SIZE:
+	if not plane_mesh or plane_mesh.size.x != GRID_SIZE or plane_mesh.subdivide_width != GRID_SUBDIVISIONS:
 		plane_mesh = PlaneMesh.new()
 		plane_mesh.size = Vector2(GRID_SIZE, GRID_SIZE)
 		plane_mesh.subdivide_width = GRID_SUBDIVISIONS
